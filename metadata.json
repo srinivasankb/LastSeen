@@ -1,0 +1,7 @@
+{
+  "name": "Last Seen",
+  "description": "Log and share your last known location with your trusted circle.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

@@ -1,20 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
-import { HashRouter, Routes, Route, useParams, useNavigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { pb, isAuthenticated } from './lib/pocketbase';
 import Dashboard from './components/Dashboard';
 import LegalPage from './components/LegalPage';
-import PublicLocationView from './components/PublicLocationView';
 import LandingPage from './components/LandingPage';
-
-const PublicRouteWrapper: React.FC = () => {
-  const { userId } = useParams<{ userId: string }>();
-  const navigate = useNavigate();
-
-  if (!userId) return <LandingPage />;
-
-  return <PublicLocationView userId={userId} onAuthRequired={() => navigate('/')} />;
-};
 
 const MainView: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(isAuthenticated());
@@ -37,7 +26,6 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    // Initial auth check delay to prevent layout shift
     const timer = setTimeout(() => setLoading(false), 500);
     return () => clearTimeout(timer);
   }, []);
@@ -60,9 +48,9 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-white text-[#1c1b1f] selection:bg-[#6750a4]/10">
         <Routes>
           <Route path="/" element={<MainView />} />
-          <Route path="/loc/:userId" element={<PublicRouteWrapper />} />
           <Route path="/privacy" element={<LegalPage title="Privacy Policy" type="privacy" />} />
           <Route path="/terms" element={<LegalPage title="Terms & Conditions" type="terms" />} />
+          <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </div>
     </HashRouter>

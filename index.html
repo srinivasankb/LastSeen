@@ -23,7 +23,6 @@
             height: 100%;
             z-index: 1;
         }
-        /* Custom scrollbar */
         ::-webkit-scrollbar {
             width: 6px;
         }
@@ -37,6 +36,17 @@
         .custom-div-icon {
             background: none;
             border: none;
+        }
+        .leaflet-popup-content-wrapper {
+            border-radius: 20px;
+            padding: 0;
+            overflow: hidden;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        .leaflet-popup-content {
+            margin: 0 !important;
+            width: auto !important;
+            max-width: 280px;
         }
     </style>
 <script type="importmap">

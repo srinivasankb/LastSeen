@@ -26,37 +26,23 @@ const LegalPage: React.FC<LegalPageProps> = ({ title, type }) => {
         {type === 'privacy' ? (
           <div className="space-y-6 text-[#1c1b1f]">
             <section>
-              <h2 className="text-2xl font-bold mb-4">Your Privacy Matters</h2>
+              <h2 className="text-2xl font-bold mb-4">Direct Connection Privacy</h2>
               <p className="text-slate-600 leading-relaxed">
-                Last Seen is designed to provide safety through transparency. We understand that location data is highly sensitive and have built this service with privacy in mind.
+                Last Seen is built around <strong>Direct Peer Connections</strong>. We do not support public discovery. Your location data is strictly shared only with users you have explicitly added to your connections list.
               </p>
             </section>
 
             <section>
-              <h3 className="text-lg font-bold mb-2">Data Collection</h3>
+              <h3 className="text-lg font-bold mb-2">How Sharing Works</h3>
               <p className="text-slate-600 leading-relaxed">
-                We collect your GPS coordinates (latitude and longitude), an optional text note, and your account information (name, email, avatar) when you choose to share your location.
+                When you add someone's email to your connections, you are giving them permission to view your latest location log. You can revoke this permission at any time by removing them from your list.
               </p>
             </section>
 
             <section>
-              <h3 className="text-lg font-bold mb-2">How Data is Used</h3>
+              <h3 className="text-lg font-bold mb-2">Manual Location Logging</h3>
               <p className="text-slate-600 leading-relaxed">
-                Your location data is shared exclusively with other registered users of the Last Seen application. It is used solely to provide "last seen" status to your trusted circle. We do not sell your data to third parties.
-              </p>
-            </section>
-
-            <section>
-              <h3 className="text-lg font-bold mb-2">Data Retention</h3>
-              <p className="text-slate-600 leading-relaxed">
-                We only store your most recent location update. Previous location history is not tracked or permanently stored by our application logic. You can clear your location data at any time using the "Clear My Location" feature.
-              </p>
-            </section>
-
-            <section>
-              <h3 className="text-lg font-bold mb-2">Storage</h3>
-              <p className="text-slate-600 leading-relaxed">
-                Data is stored securely on our PocketBase servers. We utilize standard security practices to protect your information.
+                Last Seen does not track you in the background. We only record your location when you explicitly click "Log My Spot". We only store your <strong>latest</strong> update; previous history is overwritten.
               </p>
             </section>
           </div>
@@ -65,35 +51,21 @@ const LegalPage: React.FC<LegalPageProps> = ({ title, type }) => {
             <section>
               <h2 className="text-2xl font-bold mb-4">Terms of Service</h2>
               <p className="text-slate-600 leading-relaxed">
-                By using Last Seen, you agree to the following terms and conditions. Please read them carefully.
+                By connecting with users on Last Seen, you agree to these terms.
               </p>
             </section>
 
             <section>
-              <h3 className="text-lg font-bold mb-2">Acceptable Use</h3>
+              <h3 className="text-lg font-bold mb-2">Connection Responsibility</h3>
               <p className="text-slate-600 leading-relaxed">
-                You agree to use this service only for its intended purpose: sharing your location with trusted contacts for safety. Any use of the service for stalking, harassment, or illegal activities is strictly prohibited and will result in immediate account termination.
+                Users are responsible for verifying the email addresses they add as connections. Do not add users you do not trust with your physical location.
               </p>
             </section>
 
             <section>
-              <h3 className="text-lg font-bold mb-2">Accuracy of Information</h3>
+              <h3 className="text-lg font-bold mb-2">No Passive Tracking</h3>
               <p className="text-slate-600 leading-relaxed">
-                Last Seen relies on your device's GPS and network capabilities. We do not guarantee the accuracy, completeness, or timeliness of location data provided through the service. Do not rely solely on this app for critical emergency situations.
-              </p>
-            </section>
-
-            <section>
-              <h3 className="text-lg font-bold mb-2">Account Responsibility</h3>
-              <p className="text-slate-600 leading-relaxed">
-                You are responsible for maintaining the security of your account and for all activities that occur under your account.
-              </p>
-            </section>
-
-            <section>
-              <h3 className="text-lg font-bold mb-2">Disclaimer of Warranties</h3>
-              <p className="text-slate-600 leading-relaxed">
-                The service is provided "as is" and "as available" without any warranties of any kind. We reserve the right to modify or discontinue the service at any time without notice.
+                This app is a manual utility. We make no guarantee that a user's status is their current live position. Always check the timestamp for context. Do not use this as a replacement for emergency services.
               </p>
             </section>
           </div>
@@ -104,7 +76,7 @@ const LegalPage: React.FC<LegalPageProps> = ({ title, type }) => {
             to="/"
             className="px-8 py-3 bg-[#6750a4] text-white rounded-full font-bold text-sm uppercase tracking-widest hover:bg-[#7e6bb4] transition-all active:scale-95 shadow-md"
           >
-            I Understand
+            I Accept
           </Link>
         </div>
       </main>

@@ -1,8 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { pb } from '../lib/pocketbase';
 import L from 'leaflet';
 import { differenceInHours, formatDistanceToNow } from 'date-fns';
 import { Link } from 'react-router-dom';
+import ConnectionsManager from './ConnectionsManager';
 
 interface LocationLog {
   id: string;
@@ -19,7 +21,7 @@ interface LocationLog {
       name: string;
       email: string;
       avatar: string;
-      publicSharing?: boolean;
+      connections: string[];
     }
   }
 }
@@ -39,330 +41,284 @@ const LocationsView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [isStale, setIsStale] = useState(false);
-  const [copied, setCopied] = useState(false);
-  
-  const [isPubliclySharing, setIsPubliclySharing] = useState(pb.authStore.record?.publicSharing ?? false);
+  const [showProfileEdit, setShowProfileEdit] = useState(false);
+  const [newName, setNewName] = useState(pb.authStore.record?.name || '');
   
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
   const markersLayer = useRef<L.LayerGroup | null>(null);
+  const markerRefs = useRef<Record<string, L.Marker>>({});
 
   const user = pb.authStore.record;
 
+  const latestLocations = useMemo(() => {
+    const uniqueMap: Record<string, LocationLog> = {};
+    allLocations.forEach(loc => {
+      if (!uniqueMap[loc.user] || new Date(loc.updated) > new Date(uniqueMap[loc.user].updated)) {
+        uniqueMap[loc.user] = loc;
+      }
+    });
+    return Object.values(uniqueMap).sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime());
+  }, [allLocations]);
+
   const fetchData = async () => {
     try {
-      // Fetch all locations that are either mine OR belong to users with public sharing enabled
+      const myId = pb.authStore.record?.id;
+      if (!myId) return;
+
+      // Rule handles permissions: user.connections.id ?= @request.auth.id || user = @request.auth.id
       const records = await pb.collection('locations').getFullList<LocationLog>({
         sort: '-updated',
         expand: 'user',
+        requestKey: null, 
       });
       
       setAllLocations(records);
 
-      const myId = pb.authStore.record?.id;
       const myLoc = records.find(r => r.user === myId);
-      
       if (myLoc) {
         setCurrentUserLoc(myLoc);
         setNote(myLoc.note || '');
-        const hoursDiff = differenceInHours(new Date(), new Date(myLoc.updated));
-        setIsStale(hoursDiff >= 24);
-      } else {
-        setCurrentUserLoc(null);
-        setIsStale(true);
+        setIsStale(differenceInHours(new Date(), new Date(myLoc.updated)) >= 24);
       }
-      
       setError(null);
     } catch (err: any) {
-      console.error('Fetch error:', err);
-      setError("Unable to sync registry.");
+      if (err.name !== 'ClientResponseError' || !err.isAbort) {
+        console.error('Fetch error:', err);
+        setError("Location sync failed. Check your PocketBase API rules.");
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleProfileUpdate = async () => {
+    if (!user) return;
+    try {
+      const updated = await pb.collection('users').update(user.id, { name: newName });
+      pb.authStore.save(pb.authStore.token, updated);
+      setShowProfileEdit(false);
+      fetchData();
+    } catch (err) {
+      setError("Profile update failed.");
     }
   };
 
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 60000);
-    return () => {
-      clearInterval(interval);
-      if (leafletMap.current) leafletMap.current.remove();
-    };
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     if (mapRef.current && !leafletMap.current) {
-      leafletMap.current = L.map(mapRef.current, {
-        zoomControl: false,
-        attributionControl: false
-      }).setView([0, 0], 2);
-      
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        maxZoom: 20
-      }).addTo(leafletMap.current);
-      
+      leafletMap.current = L.map(mapRef.current, { zoomControl: false, attributionControl: false }).setView([0, 0], 2);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(leafletMap.current);
       L.control.zoom({ position: 'bottomright' }).addTo(leafletMap.current);
       markersLayer.current = L.layerGroup().addTo(leafletMap.current);
     }
 
     if (markersLayer.current && leafletMap.current) {
       markersLayer.current.clearLayers();
+      markerRefs.current = {};
       const bounds = L.latLngBounds([]);
       
-      allLocations.forEach(loc => {
-        const userName = loc.expand?.user?.name || loc.expand?.user?.email?.split('@')[0] || "Unknown User";
+      latestLocations.forEach(loc => {
+        const userName = loc.expand?.user?.name || loc.expand?.user?.email?.split('@')[0] || "User";
         const isMe = loc.user === pb.authStore.record?.id;
-        const timeStr = formatDistanceToNow(new Date(loc.updated), { addSuffix: true });
-        const avatarUrl = loc.expand?.user?.avatar 
-          ? pb.files.getURL(loc.expand.user, loc.expand.user.avatar, { thumb: '100x100' })
-          : null;
+        const avatarUrl = (loc.expand?.user?.id && loc.expand?.user?.avatar) ? pb.files.getURL(loc.expand.user, loc.expand.user.avatar, { thumb: '100x100' }) : null;
+        const hoursDiff = differenceInHours(new Date(), new Date(loc.updated));
 
         const icon = L.divIcon({
           className: 'custom-div-icon',
           html: `
-            <div class="flex flex-col items-center">
-              <div class="relative group">
-                <div class="w-12 h-12 ${isMe ? 'bg-[#6750a4]' : 'bg-slate-900'} rounded-2xl border-4 border-white shadow-2xl flex items-center justify-center text-white text-xs font-bold overflow-hidden transition-all group-hover:scale-110">
-                  ${avatarUrl ? `<img src="${avatarUrl}" class="w-full h-full object-cover" />` : userName.charAt(0).toUpperCase()}
-                </div>
-                <div class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${differenceInHours(new Date(), new Date(loc.updated)) >= 24 ? 'bg-amber-500' : 'bg-green-500'}"></div>
+            <div class="relative group">
+              <div class="w-12 h-12 ${isMe ? 'bg-[#6750a4]' : 'bg-slate-900'} rounded-2xl border-4 border-white shadow-xl flex items-center justify-center text-white text-xs font-bold overflow-hidden transition-all group-hover:scale-110">
+                ${avatarUrl ? `<img src="${avatarUrl}" class="w-full h-full object-cover" />` : userName.charAt(0).toUpperCase()}
               </div>
+              <div class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${hoursDiff >= 24 ? 'bg-amber-500' : 'bg-green-500'}"></div>
             </div>
           `,
           iconSize: [48, 48],
           iconAnchor: [24, 24]
         });
 
-        const marker = L.marker([loc.lat, loc.lng], { icon })
-          .bindPopup(`
-            <div class="p-3 text-center min-w-[140px]">
-              <p class="font-bold text-sm mb-1 text-slate-900">${isMe ? 'Your Location' : escapeHTML(userName)}</p>
-              <p class="text-[10px] font-black uppercase tracking-widest text-[#6750a4] mb-2">${timeStr}</p>
-              ${loc.note ? `<p class="text-[11px] text-slate-500 italic bg-slate-50 p-2 rounded-xl">"${escapeHTML(loc.note)}"</p>` : ''}
-            </div>
-          `);
+        const marker = L.marker([loc.lat, loc.lng], { icon }).bindPopup(`
+          <div class="p-4 text-center">
+            <p class="font-bold text-sm mb-1 text-slate-900">${isMe ? 'Your Location' : escapeHTML(userName)}</p>
+            <p class="text-[9px] font-black uppercase tracking-widest text-[#6750a4] mb-3">${formatDistanceToNow(new Date(loc.updated), { addSuffix: true })}</p>
+            ${loc.note ? `<p class="text-[11px] text-slate-500 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100 break-words">"${escapeHTML(loc.note)}"</p>` : ''}
+          </div>
+        `);
         
+        markerRefs.current[loc.user] = marker;
         markersLayer.current?.addLayer(marker);
         bounds.extend([loc.lat, loc.lng]);
       });
 
-      if (allLocations.length > 0 && leafletMap.current.getZoom() === 2) {
-        leafletMap.current.fitBounds(bounds, { padding: [100, 100], maxZoom: 15 });
+      if (latestLocations.length > 0 && leafletMap.current) {
+        leafletMap.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
       }
     }
-  }, [allLocations]);
+  }, [latestLocations]);
 
-  const togglePublicSharing = async () => {
-    if (!user) return;
-    setError(null);
-    try {
-      const newStatus = !isPubliclySharing;
-      const updatedUser = await pb.collection('users').update(user.id, { publicSharing: newStatus });
-      setIsPubliclySharing(newStatus);
-      // Update local auth store cache
-      pb.authStore.save(pb.authStore.token, updatedUser);
-    } catch (err: any) {
-      setError("Failed to update sharing preference.");
+  const focusMember = (userId: string, lat: number, lng: number) => {
+    if (!leafletMap.current) return;
+    leafletMap.current.setView([lat, lng], 16, { animate: true });
+    const marker = markerRefs.current[userId];
+    if (marker) {
+      setTimeout(() => marker.openPopup(), 300);
     }
-  };
-
-  const copyShareLink = () => {
-    // Generate URL based on the standard format
-    const baseUrl = window.location.origin + window.location.pathname;
-    const shareUrl = `${baseUrl}#/loc/${user?.id}`;
-    
-    navigator.clipboard.writeText(shareUrl).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }).catch(() => {
-      setError("Failed to copy to clipboard.");
-    });
   };
 
   const handleUpdate = () => {
-    if (!navigator.geolocation) {
-      setError("GPS not supported on this device.");
-      return;
-    }
+    if (!navigator.geolocation) return setError("GPS not supported.");
     setLogging(true);
     setError(null);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
-          const data = { 
-            user: user?.id, 
-            lat: pos.coords.latitude, 
-            lng: pos.coords.longitude, 
-            note: note.trim() 
-          };
-          if (currentUserLoc) {
-            await pb.collection('locations').update(currentUserLoc.id, data);
-          } else {
-            await pb.collection('locations').create(data);
-          }
+          const data = { user: user?.id, lat: pos.coords.latitude, lng: pos.coords.longitude, note: note.trim() };
+          if (currentUserLoc) await pb.collection('locations').update(currentUserLoc.id, data);
+          else await pb.collection('locations').create(data);
           await fetchData();
-        } catch (err) { 
-          setError("Failed to transmit location data."); 
-        } finally { 
-          setLogging(false); 
-        }
+        } catch (err) { setError("Transmit failed."); }
+        finally { setLogging(false); }
       },
-      () => { 
-        setError("GPS Access Denied. Please enable location permissions."); 
-        setLogging(false); 
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
+      () => { setError("GPS Denied."); setLogging(false); },
+      { enableHighAccuracy: true }
     );
   };
 
   return (
-    <div className="h-full flex flex-col md:flex-row relative bg-white">
-      {/* Map View */}
-      <div className="flex-1 relative order-2 md:order-1 h-full min-h-[300px]">
+    <div className="h-full flex flex-col md:flex-row bg-white overflow-hidden">
+      <div className="flex-1 relative order-1 h-[40vh] md:h-full">
         <div ref={mapRef} className="w-full h-full" />
       </div>
 
-      {/* Sidebar Controls */}
-      <aside className="w-full md:w-80 lg:w-96 bg-white border-r border-slate-100 flex flex-col order-1 md:order-2 z-10 md:h-full overflow-hidden shadow-2xl md:shadow-none">
-        <div className="p-6 space-y-6 flex-1 overflow-y-auto">
-          {/* My Location Section */}
-          <div className={`p-6 rounded-[32px] border-2 transition-all duration-500 ${isStale ? 'bg-amber-50 border-amber-100' : 'bg-[#f7f2fa] border-transparent'}`}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-slate-900">My Status</h2>
-              {isStale && <span className="bg-amber-500 text-[9px] text-white px-2 py-0.5 rounded-full font-black uppercase animate-pulse">Update Needed</span>}
+      <aside className="w-full md:w-80 lg:w-96 bg-white border-t md:border-t-0 md:border-r border-slate-100 flex flex-col order-2 z-10 h-[60vh] md:h-full overflow-hidden shadow-2xl md:shadow-none">
+        <div className="p-4 sm:p-6 space-y-6 flex-1 overflow-y-auto">
+          
+          <div className="p-4 bg-slate-50 rounded-3xl border border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+               <div className="w-10 h-10 rounded-xl bg-[#6750a4]/10 flex items-center justify-center text-[#6750a4] font-bold">
+                 {(user?.name || 'U').charAt(0).toUpperCase()}
+               </div>
+               <div>
+                 <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Display Name</p>
+                 <p className="text-xs font-bold text-slate-900 truncate max-w-[120px]">{user?.name || "Guest"}</p>
+               </div>
             </div>
-            
-            <input
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Where are you going?"
-              className="w-full px-5 py-3 bg-white border border-slate-100 rounded-2xl text-xs mb-4 outline-none focus:ring-2 focus:ring-[#6750a4]/10 transition-all placeholder:text-slate-300"
-            />
-            
-            <button
-              onClick={handleUpdate}
-              disabled={logging}
-              className={`w-full py-4 rounded-full font-bold text-xs uppercase tracking-[0.15em] shadow-lg shadow-indigo-100/50 transition-all active:scale-95 disabled:opacity-50 ${isStale ? 'bg-amber-500 hover:bg-amber-600' : 'bg-[#6750a4] hover:bg-[#7e6bb4]'} text-white flex items-center justify-center gap-3`}
+            <button 
+              onClick={() => setShowProfileEdit(!showProfileEdit)}
+              className="text-[10px] font-bold text-[#6750a4] hover:bg-white px-3 py-1.5 rounded-lg border border-transparent hover:border-slate-100 transition-all"
             >
-              {logging ? (
-                <div className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full"></div>
-              ) : (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  </svg>
-                  <span>Update My Spot</span>
-                </>
-              )}
+              Edit
             </button>
+          </div>
 
-            {/* Public Sharing Toggle (Universal User Setting) */}
-            <div className="mt-6 pt-6 border-t border-black/5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Global Share</span>
-                  <span className="text-[9px] text-slate-400">Share with anyone via link</span>
-                </div>
-                <button 
-                  onClick={togglePublicSharing}
-                  className={`w-11 h-6 rounded-full relative transition-all duration-500 ${isPubliclySharing ? 'bg-[#6750a4]' : 'bg-slate-200'}`}
-                >
-                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300 ${isPubliclySharing ? 'left-6' : 'left-1'}`} />
-                </button>
-              </div>
-              
-              {isPubliclySharing && (
-                <button 
-                  onClick={copyShareLink} 
-                  className={`w-full py-2.5 rounded-xl border border-dashed transition-all font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 ${copied ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-white border-slate-200 text-[#6750a4] hover:bg-[#6750a4]/5'}`}
-                >
-                  {copied ? (
-                    <>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      Copied Link
-                    </>
-                  ) : (
-                    <>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                      Copy Share Link
-                    </>
-                  )}
-                </button>
-              )}
+          {showProfileEdit && (
+            <div className="p-4 bg-[#6750a4]/5 rounded-3xl border border-[#6750a4]/10 animate-in slide-in-from-top-2">
+               <input 
+                type="text" 
+                value={newName} 
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="New name..."
+                className="w-full px-4 py-2 bg-white border border-slate-100 rounded-xl text-xs mb-3 focus:ring-2 focus:ring-[#6750a4] outline-none"
+               />
+               <div className="flex gap-2">
+                 <button onClick={handleProfileUpdate} className="flex-1 py-2 bg-[#6750a4] text-white rounded-xl text-[10px] font-bold uppercase tracking-widest">Save</button>
+                 <button onClick={() => setShowProfileEdit(false)} className="px-4 py-2 text-slate-400 text-[10px] font-bold uppercase">Cancel</button>
+               </div>
             </div>
-            {error && <p className="mt-3 text-[10px] text-rose-500 font-bold uppercase tracking-tight text-center bg-rose-50 p-2 rounded-xl border border-rose-100">{error}</p>}
+          )}
+
+          <hr className="border-slate-50" />
+          
+          <ConnectionsManager onRefresh={fetchData} />
+
+          <hr className="border-slate-50" />
+
+          <div className={`p-5 rounded-[32px] border-2 ${isStale ? 'bg-amber-50 border-amber-100' : 'bg-[#f7f2fa] border-transparent'}`}>
+            <h2 className="font-bold text-slate-900 mb-4 flex justify-between items-center text-sm">
+              My Status
+              {isStale && <span className="text-[8px] bg-amber-500 text-white px-2 py-0.5 rounded-full uppercase tracking-widest font-black">Outdated</span>}
+            </h2>
+            <input
+              type="text" value={note} onChange={(e) => setNote(e.target.value)}
+              placeholder="Where are you going?"
+              className="w-full px-5 py-3.5 bg-white border border-slate-100 rounded-2xl text-sm mb-4 outline-none focus:ring-2 focus:ring-[#6750a4] transition-all"
+            />
+            <button
+              onClick={handleUpdate} disabled={logging}
+              className={`w-full min-h-[52px] rounded-full font-bold text-xs uppercase tracking-widest text-white flex items-center justify-center gap-3 transition-all ${isStale ? 'bg-amber-500 shadow-amber-100' : 'bg-[#6750a4] shadow-indigo-100'}`}
+            >
+              {logging ? <div className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full"></div> : "Log My Spot"}
+            </button>
           </div>
           
-          {/* List of Other Users */}
-          <div className="space-y-4 pb-12">
-            <div className="px-2 flex justify-between items-center">
-              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Trusted Circle</h3>
-              <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[9px] font-bold">{allLocations.length} active</span>
-            </div>
-            
-            <div className="space-y-3">
-              {allLocations.map(loc => {
+          <div className="space-y-4 pb-8">
+            <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 px-2">Connections Shared with Me</h3>
+            <div className="space-y-2">
+              {latestLocations.map(loc => {
                  const isMe = loc.user === user?.id;
                  const userName = loc.expand?.user?.name || loc.expand?.user?.email?.split('@')[0] || "User";
-                 const avatarUrl = loc.expand?.user?.avatar 
-                  ? pb.files.getURL(loc.expand.user, loc.expand.user.avatar, { thumb: '100x100' })
-                  : null;
-                 const hoursOld = differenceInHours(new Date(), new Date(loc.updated));
+                 const hoursDiff = differenceInHours(new Date(), new Date(loc.updated));
                  
                  return (
-                    <div 
+                    <button 
                       key={loc.id} 
-                      onClick={() => leafletMap.current?.setView([loc.lat, loc.lng], 16)}
-                      className="group p-4 bg-slate-50/50 hover:bg-[#6750a4]/5 rounded-3xl border border-transparent hover:border-[#6750a4]/10 transition-all cursor-pointer flex items-center gap-4"
+                      onClick={() => focusMember(loc.user, loc.lat, loc.lng)}
+                      className="w-full p-4 bg-slate-50/50 hover:bg-[#6750a4]/5 hover:translate-x-1 border border-transparent hover:border-[#6750a4]/10 rounded-[24px] flex items-center gap-4 transition-all group"
                     >
                       <div className="relative shrink-0">
-                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white font-bold text-sm overflow-hidden ${isMe ? 'bg-[#6750a4]' : 'bg-slate-900 shadow-sm group-hover:shadow-md'}`}>
-                          {avatarUrl ? <img src={avatarUrl} className="w-full h-full object-cover" /> : userName.charAt(0).toUpperCase()}
+                        <div className={`w-12 h-12 rounded-[18px] flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm ${isMe ? 'bg-[#6750a4]' : 'bg-slate-900'}`}>
+                          {loc.expand?.user?.avatar ? (
+                            <img src={pb.files.getURL(loc.expand.user, loc.expand.user.avatar, { thumb: '100x100' })} className="w-full h-full object-cover rounded-[18px]" />
+                          ) : userName.charAt(0).toUpperCase()}
                         </div>
-                        <div className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${hoursOld >= 24 ? 'bg-amber-400' : 'bg-green-400'}`}></div>
+                        <div className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${hoursDiff >= 24 ? 'bg-amber-500' : 'bg-green-500'}`}></div>
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 text-left">
                         <div className="flex justify-between items-baseline mb-0.5">
-                          <p className="text-xs font-bold text-slate-900 truncate">{isMe ? 'You' : userName}</p>
-                          <p className="text-[9px] text-slate-400 font-medium whitespace-nowrap ml-2">{formatDistanceToNow(new Date(loc.updated), { addSuffix: true })}</p>
+                          <p className={`text-xs font-bold truncate ${isMe ? 'text-[#6750a4]' : 'text-slate-900'}`}>
+                            {isMe ? 'You' : userName}
+                          </p>
+                          <p className="text-[8px] text-slate-400 font-black uppercase tracking-tight whitespace-nowrap ml-2">
+                            {formatDistanceToNow(new Date(loc.updated), { addSuffix: true })}
+                          </p>
                         </div>
-                        {loc.note ? (
-                          <p className="text-[10px] text-slate-500 truncate leading-tight font-medium">"{escapeHTML(loc.note)}"</p>
-                        ) : (
-                          <p className="text-[10px] text-slate-300 italic">No note added</p>
-                        )}
+                        <p className="text-[11px] text-slate-500 truncate italic">
+                          {loc.note ? `"${loc.note}"` : 'No current note'}
+                        </p>
                       </div>
-                    </div>
+                      <div className="text-slate-200 group-hover:text-[#6750a4] transition-colors">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </button>
                  );
               })}
-              
-              {!loading && allLocations.length === 0 && (
-                <div className="py-20 flex flex-col items-center justify-center text-center px-6 border-2 border-dashed border-slate-100 rounded-[40px]">
-                  <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              {latestLocations.filter(l => l.user !== user?.id).length === 0 && (
+                <div className="py-12 text-center px-6 border-2 border-dashed border-slate-100 rounded-[32px] bg-slate-50/30">
+                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 opacity-50">
+                    <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                     </svg>
                   </div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nothing to show</p>
-                  <p className="text-[10px] text-slate-300 mt-2 max-w-[160px]">Update your location or invite friends to join your circle.</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.15em] leading-relaxed">
+                    No connected updates<br/>visible yet
+                  </p>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Sidebar Footer */}
-        <footer className="p-6 border-t border-slate-50 bg-white/80 backdrop-blur-sm flex justify-between items-center">
-           <div className="flex gap-4">
-              <Link to="/privacy" className="text-[10px] uppercase font-black text-slate-300 hover:text-[#6750a4] transition-colors tracking-widest">Privacy</Link>
-              <Link to="/terms" className="text-[10px] uppercase font-black text-slate-300 hover:text-[#6750a4] transition-colors tracking-widest">Terms</Link>
-           </div>
-           <span className="text-[9px] font-black text-slate-200 uppercase tracking-tighter">Last Seen v1.2.1</span>
+        <footer className="p-4 border-t border-slate-50 bg-white flex justify-between items-center text-[9px] font-black text-slate-300 uppercase tracking-widest">
+           <Link to="/privacy" className="hover:text-[#6750a4]">Privacy</Link>
+           <span>Direct Connections Only</span>
         </footer>
       </aside>
     </div>

@@ -19,12 +19,18 @@ const AuthCard: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-[28px] shadow-sm overflow-hidden border border-[#eaddff] p-8">
+    <div className="bg-white rounded-[32px] shadow-2xl shadow-indigo-100/50 overflow-hidden border border-slate-100 p-8 md:p-10">
       <div className="text-center">
-        <h2 className="text-xl font-bold text-[#1c1b1f] mb-6">Welcome Back</h2>
+        <div className="w-16 h-16 bg-[#f7f2fa] rounded-2xl flex items-center justify-center mx-auto mb-6">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-[#6750a4]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </div>
+        <h2 className="text-2xl font-bold text-slate-900 mb-2">Secure Sign In</h2>
+        <p className="text-slate-500 text-sm mb-8">Access your circle and share your status.</p>
         
         {error && (
-          <div className="mb-6 p-4 bg-rose-50 border border-rose-100 text-rose-600 text-xs font-bold rounded-2xl flex items-center gap-3">
+          <div className="mb-6 p-4 bg-rose-50 border border-rose-100 text-rose-600 text-xs font-bold rounded-2xl flex items-center gap-3 animate-shake">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
             </svg>
@@ -35,13 +41,13 @@ const AuthCard: React.FC = () => {
         <button
           onClick={() => handleOAuth('google')}
           disabled={loading}
-          className="w-full h-14 bg-[#6750a4] hover:bg-[#7e6bb4] disabled:bg-slate-200 text-white font-medium rounded-full transition-all duration-200 flex items-center justify-center gap-3 shadow-md active:scale-95 disabled:opacity-70"
+          className="w-full h-16 bg-[#6750a4] hover:bg-[#7e6bb4] disabled:bg-slate-200 text-white font-bold rounded-full transition-all duration-300 flex items-center justify-center gap-4 shadow-lg shadow-indigo-100 active:scale-[0.98] disabled:opacity-70 group"
         >
           {loading ? (
-            <div className="animate-spin h-5 w-5 border-2 border-white/30 border-t-white rounded-full"></div>
+            <div className="animate-spin h-6 w-6 border-3 border-white/30 border-t-white rounded-full"></div>
           ) : (
             <>
-              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+              <svg className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                 <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
@@ -53,10 +59,17 @@ const AuthCard: React.FC = () => {
         </button>
       </div>
       
-      <div className="mt-8 pt-6 border-t border-slate-100">
-        <p className="text-[11px] text-slate-400 text-center font-medium">
-          Logging your location helps friends find you in case of emergency.
-        </p>
+      <div className="mt-10 pt-8 border-t border-slate-50">
+        <div className="flex items-start gap-4">
+          <div className="p-2 bg-indigo-50 rounded-lg shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+            By continuing, you agree to our Terms of Service and Privacy Policy. We only share your location data with people you approve.
+          </p>
+        </div>
       </div>
     </div>
   );

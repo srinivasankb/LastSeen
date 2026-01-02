@@ -33,8 +33,8 @@ const ConnectionsManager: React.FC<ConnectionsManagerProps> = ({ onRefresh }) =>
       });
 
       const list = (user.expand?.connections as ConnectedUser[]) || [];
-      // Filter out any potential deleted ghosts
-      setConnections(list.filter(c => c && c.id));
+      // Filter out any potential deleted ghosts and ensure they are valid objects
+      setConnections(list.filter(c => c && typeof c === 'object' && c.id));
     } catch (err) {
       console.error('Failed to fetch connections:', err);
     } finally {
@@ -53,55 +53,69 @@ const ConnectionsManager: React.FC<ConnectionsManagerProps> = ({ onRefresh }) =>
     const email = emailInput.trim().toLowerCase();
     
     if (!email) return;
-    if (email === pb.authStore.record?.email) {
+    
+    const currentUser = pb.authStore.record;
+    if (email === currentUser?.email) {
       setError("You cannot connect with yourself.");
       return;
     }
 
     setLoading(true);
     try {
-      // 1. Search for user. Note: Requires 'email = @request.query.email' or similar in PB List Rule
+      // 1. Search for user by email using a list filter which is more Rule-friendly
       let targetUser;
       try {
         const result = await pb.collection('users').getList(1, 1, {
           filter: `email = "${email}"`,
           requestKey: null
         });
-        
-        if (result.items.length === 0) throw new Error("Not found");
+
+        if (result.items.length === 0) {
+          throw new Error("404");
+        }
         targetUser = result.items[0];
-      } catch (err) {
-        setInviteMode(true);
-        setError(`"${email}" is not registered on Last Seen.`);
+      } catch (err: any) {
+        if (err.message === "404" || err.status === 404) {
+          setInviteMode(true);
+          setError(`"${email}" is not registered on Last Seen yet.`);
+        } else if (err.status === 403) {
+          setError("Access Denied: Please set your 'users' List Rule to: id = @request.auth.id || email != ''");
+        } else {
+          setError("Search failed. Please try again.");
+        }
         setLoading(false);
         return;
       }
 
-      // 2. Add to connections
+      // 2. Direct Add to connections
       if (connections.some(c => c.id === targetUser.id)) {
-        setError("User is already in your connections.");
+        setError("This user is already in your connections.");
       } else {
-        const userId = pb.authStore.record?.id;
-        if (userId) {
-          await pb.collection('users').update(userId, {
+        if (currentUser?.id) {
+          // Use the '+' operator to append to the relation field
+          await pb.collection('users').update(currentUser.id, {
             'connections+': targetUser.id
           });
+          
           setEmailInput('');
           setIsAdding(false);
           await fetchConnections();
           onRefresh();
+          
+          // Subtle feedback that it worked
+          console.log(`Connected with ${targetUser.email}`);
         }
       }
     } catch (err: any) {
       console.error("Add connection error:", err);
-      setError("Failed to add connection. Ensure your PocketBase 'users' List Rule allows email searching.");
+      setError(err.message || "Failed to add connection.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleRemove = async (targetId: string) => {
-    if (!window.confirm("Remove this connection?")) return;
+    if (!window.confirm("Remove this connection? They will no longer see your location.")) return;
     
     setLoading(true);
     try {
@@ -121,7 +135,7 @@ const ConnectionsManager: React.FC<ConnectionsManagerProps> = ({ onRefresh }) =>
   };
 
   const handleInvite = () => {
-    const msg = `Join me on Last Seen so we can share our last known locations! App: ${window.location.origin}`;
+    const msg = `Join me on Last Seen so we can share our last known locations! Check it out here: ${window.location.origin}`;
     window.location.href = `mailto:${emailInput}?subject=Join me on Last Seen&body=${encodeURIComponent(msg)}`;
   };
 
@@ -133,7 +147,7 @@ const ConnectionsManager: React.FC<ConnectionsManagerProps> = ({ onRefresh }) =>
           onClick={() => { setIsAdding(!isAdding); setError(null); setInviteMode(false); }} 
           className={`text-[10px] font-bold px-4 py-2 rounded-xl transition-all ${isAdding ? 'bg-slate-100 text-slate-500' : 'bg-[#6750a4] text-white shadow-sm'}`}
         >
-          {isAdding ? 'Cancel' : '+ Add User'}
+          {isAdding ? 'Cancel' : 'Add Connection'}
         </button>
       </div>
 
@@ -146,9 +160,9 @@ const ConnectionsManager: React.FC<ConnectionsManagerProps> = ({ onRefresh }) =>
           {inviteMode && (
             <button 
               onClick={handleInvite}
-              className="py-2 bg-rose-500 text-white rounded-xl text-[9px] uppercase tracking-widest"
+              className="py-2 bg-rose-500 text-white rounded-xl text-[9px] uppercase tracking-widest active:scale-95 transition-transform"
             >
-              Send Invite Email
+              Invite to Last Seen
             </button>
           )}
         </div>
@@ -156,7 +170,7 @@ const ConnectionsManager: React.FC<ConnectionsManagerProps> = ({ onRefresh }) =>
 
       {isAdding && (
         <form onSubmit={handleAddConnection} className="p-6 bg-slate-50 rounded-[32px] border border-slate-100 animate-in slide-in-from-top-2 shadow-sm">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Add by email address</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Add user by email</p>
           <input 
             type="email" 
             value={emailInput} 
@@ -164,9 +178,10 @@ const ConnectionsManager: React.FC<ConnectionsManagerProps> = ({ onRefresh }) =>
             placeholder="friend@example.com" 
             className="w-full px-5 py-4 rounded-2xl bg-white border border-slate-100 text-sm focus:ring-2 focus:ring-[#6750a4] outline-none mb-4" 
             required
+            autoFocus
           />
-          <button type="submit" disabled={loading} className="w-full py-4 bg-[#6750a4] text-white rounded-2xl font-bold text-[10px] uppercase tracking-widest shadow-lg active:scale-95 disabled:opacity-50">
-            {loading ? 'Searching...' : 'Request Connection'}
+          <button type="submit" disabled={loading} className="w-full py-4 bg-[#6750a4] text-white rounded-2xl font-bold text-[10px] uppercase tracking-widest shadow-lg active:scale-95 disabled:opacity-50 transition-all">
+            {loading ? 'Searching...' : 'Add Connection'}
           </button>
         </form>
       )}
@@ -187,9 +202,15 @@ const ConnectionsManager: React.FC<ConnectionsManagerProps> = ({ onRefresh }) =>
           </div>
         ))}
         {connections.length === 0 && !isAdding && !loading && (
-          <p className="px-2 text-[10px] font-medium text-slate-400 italic">No connections yet. Add people to share locations.</p>
+          <div className="w-full py-4 text-center border-2 border-dashed border-slate-100 rounded-3xl">
+            <p className="text-[10px] font-medium text-slate-400 italic">No connections yet.</p>
+          </div>
         )}
       </div>
+      
+      <p className="px-2 text-[9px] text-slate-300 leading-tight">
+        Note: When you add a connection, they can see your location. To see their location, they must also add you.
+      </p>
     </div>
   );
 };

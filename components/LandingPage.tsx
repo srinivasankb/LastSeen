@@ -1,6 +1,6 @@
 
 import React, { useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { pb } from '../lib/pocketbase';
 import AuthCard from './AuthCard';
 
 const LandingPage: React.FC = () => {
@@ -12,18 +12,18 @@ const LandingPage: React.FC = () => {
 
   const features = [
     {
-      title: "Direct Connections",
-      description: "Connect with specific people by email. Your location is only visible to those you have explicitly added to your connections list.",
+      title: "Shared Map",
+      description: "Instantly see where everyone in the community is. Broadcast your last known spot to help friends find you or know you're safe.",
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
         </svg>
       ),
       color: "bg-indigo-100 text-indigo-600"
     },
     {
-      title: "Secure Identity",
-      description: "No passwords needed. Sign in with Google. We only share your location data with people you know and trust.",
+      title: "Google Auth",
+      description: "Quick and secure sign-in. No passwords to remember. Your identity is verified and linked to your trusted Google account.",
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -32,11 +32,11 @@ const LandingPage: React.FC = () => {
       color: "bg-emerald-100 text-emerald-600"
     },
     {
-      title: "Full Control",
-      description: "You decide when to 'Log Your Spot'. There is no passive background tracking, and you can remove connections instantly.",
+      title: "Manual Control",
+      description: "Last Seen only tracks you when you ask it to. There's no passive tracking in the background. You decide when to log your spot.",
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       ),
       color: "bg-amber-100 text-amber-600"
@@ -70,21 +70,21 @@ const LandingPage: React.FC = () => {
         <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-8">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-bold uppercase tracking-widest">
-              Direct Connection Privacy
+              Community Sharing Map
             </div>
             <h1 className="text-5xl md:text-7xl font-bold text-slate-900 leading-[1.1]">
-              Private Safety. <br />
-              <span className="text-[#6750a4]">Direct Links.</span>
+              Shared Safety. <br />
+              <span className="text-[#6750a4]">Zero Passive Tracking.</span>
             </h1>
             <p className="text-xl text-slate-500 max-w-lg leading-relaxed">
-              No public tracking. No anonymous groups. Share your spot directly with the people who matter most.
+              Broadcast your location to the community map with a single click. Keep your circle informed of your last known whereabouts without background tracking.
             </p>
             <div className="flex flex-wrap gap-4">
               <button 
                 onClick={scrollToAuth}
                 className="px-8 py-4 bg-[#6750a4] text-white rounded-full font-bold text-lg shadow-xl shadow-indigo-100 hover:bg-[#7e6bb4] hover:-translate-y-1 transition-all active:scale-95"
               >
-                Start Connecting
+                Join the Map
               </button>
             </div>
           </div>
@@ -107,8 +107,8 @@ const LandingPage: React.FC = () => {
       <section className="py-24 bg-slate-50">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16 space-y-4">
-            <h2 className="text-3xl md:text-5xl font-bold text-slate-900 tracking-tight">One-to-One Trust.</h2>
-            <p className="text-slate-500 max-w-2xl mx-auto text-lg leading-relaxed">We focus on direct connections to ensure your location data never falls into the wrong hands.</p>
+            <h2 className="text-3xl md:text-5xl font-bold text-slate-900 tracking-tight">Simple. Community-Led.</h2>
+            <p className="text-slate-500 max-w-2xl mx-auto text-lg leading-relaxed">Broadcast your status manually to the communal map and see where everyone is at a glance.</p>
           </div>
           <div className="grid md:grid-cols-3 gap-10">
             {features.map((feature, idx) => (
@@ -128,8 +128,8 @@ const LandingPage: React.FC = () => {
       <section ref={authSectionRef} className="py-32 px-6 bg-[#f7f2fa]">
         <div className="max-w-7xl mx-auto flex flex-col items-center">
           <div className="text-center mb-16 max-w-lg">
-            <h2 className="text-4xl font-bold text-slate-900 mb-4 tracking-tight">Safe and Simple.</h2>
-            <p className="text-slate-500 leading-relaxed text-lg">Sign in with Google, add your friends' email addresses, and start sharing your last known location.</p>
+            <h2 className="text-4xl font-bold text-slate-900 mb-4 tracking-tight">Stay Connected.</h2>
+            <p className="text-slate-500 leading-relaxed text-lg">Sign in with Google to join the community map. Broadcast your spot and see others in real-time.</p>
           </div>
           <div className="w-full max-w-md">
             <AuthCard />

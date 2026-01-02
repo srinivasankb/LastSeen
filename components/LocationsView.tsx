@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { pb } from '../lib/pocketbase';
 import L from 'leaflet';
@@ -37,7 +36,6 @@ const LocationsView: React.FC = () => {
   const [currentUserLoc, setCurrentUserLoc] = useState<LocationLog | null>(null);
   const [loading, setLoading] = useState(true);
   const [logging, setLogging] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [isStale, setIsStale] = useState(false);
@@ -53,6 +51,7 @@ const LocationsView: React.FC = () => {
 
   const fetchData = async () => {
     try {
+      // Fetch all locations that are either mine OR belong to users with public sharing enabled
       const records = await pb.collection('locations').getFullList<LocationLog>({
         sort: '-updated',
         expand: 'user',
@@ -123,7 +122,7 @@ const LocationsView: React.FC = () => {
           html: `
             <div class="flex flex-col items-center">
               <div class="relative group">
-                <div class="w-12 h-12 ${isMe ? 'bg-[#6750a4]' : 'bg-slate-900'} rounded-2xl border-4 border-white shadow-2xl flex items-center justify-center text-white text-xs font-bold overflow-hidden transition-transform group-hover:scale-110">
+                <div class="w-12 h-12 ${isMe ? 'bg-[#6750a4]' : 'bg-slate-900'} rounded-2xl border-4 border-white shadow-2xl flex items-center justify-center text-white text-xs font-bold overflow-hidden transition-all group-hover:scale-110">
                   ${avatarUrl ? `<img src="${avatarUrl}" class="w-full h-full object-cover" />` : userName.charAt(0).toUpperCase()}
                 </div>
                 <div class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${differenceInHours(new Date(), new Date(loc.updated)) >= 24 ? 'bg-amber-500' : 'bg-green-500'}"></div>
@@ -136,7 +135,7 @@ const LocationsView: React.FC = () => {
 
         const marker = L.marker([loc.lat, loc.lng], { icon })
           .bindPopup(`
-            <div class="p-3 text-center">
+            <div class="p-3 text-center min-w-[140px]">
               <p class="font-bold text-sm mb-1 text-slate-900">${isMe ? 'Your Location' : escapeHTML(userName)}</p>
               <p class="text-[10px] font-black uppercase tracking-widest text-[#6750a4] mb-2">${timeStr}</p>
               ${loc.note ? `<p class="text-[11px] text-slate-500 italic bg-slate-50 p-2 rounded-xl">"${escapeHTML(loc.note)}"</p>` : ''}
@@ -160,24 +159,29 @@ const LocationsView: React.FC = () => {
       const newStatus = !isPubliclySharing;
       const updatedUser = await pb.collection('users').update(user.id, { publicSharing: newStatus });
       setIsPubliclySharing(newStatus);
+      // Update local auth store cache
       pb.authStore.save(pb.authStore.token, updatedUser);
     } catch (err: any) {
-      setError("Failed to update sharing.");
+      setError("Failed to update sharing preference.");
     }
   };
 
   const copyShareLink = () => {
-    // Standardizing the URL format to any domain the app is in + /loc/userId
-    // Since we use HashRouter, it's [origin]/#/loc/[id]
-    const shareUrl = `${window.location.origin}${window.location.pathname}#/loc/${user?.id}`;
-    navigator.clipboard.writeText(shareUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    // Generate URL based on the standard format
+    const baseUrl = window.location.origin + window.location.pathname;
+    const shareUrl = `${baseUrl}#/loc/${user?.id}`;
+    
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      setError("Failed to copy to clipboard.");
+    });
   };
 
   const handleUpdate = () => {
     if (!navigator.geolocation) {
-      setError("GPS not supported.");
+      setError("GPS not supported on this device.");
       return;
     }
     setLogging(true);
@@ -185,15 +189,29 @@ const LocationsView: React.FC = () => {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
-          const data = { user: user?.id, lat: pos.coords.latitude, lng: pos.coords.longitude, note: note.trim() };
-          if (currentUserLoc) await pb.collection('locations').update(currentUserLoc.id, data);
-          else await pb.collection('locations').create(data);
+          const data = { 
+            user: user?.id, 
+            lat: pos.coords.latitude, 
+            lng: pos.coords.longitude, 
+            note: note.trim() 
+          };
+          if (currentUserLoc) {
+            await pb.collection('locations').update(currentUserLoc.id, data);
+          } else {
+            await pb.collection('locations').create(data);
+          }
           await fetchData();
-        } catch (err) { setError("Failed to update."); }
-        finally { setLogging(false); }
+        } catch (err) { 
+          setError("Failed to transmit location data."); 
+        } finally { 
+          setLogging(false); 
+        }
       },
-      () => { setError("GPS Access Denied."); setLogging(false); },
-      { enableHighAccuracy: true }
+      () => { 
+        setError("GPS Access Denied. Please enable location permissions."); 
+        setLogging(false); 
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   };
 
@@ -205,27 +223,27 @@ const LocationsView: React.FC = () => {
       </div>
 
       {/* Sidebar Controls */}
-      <aside className="w-full md:w-80 lg:w-96 bg-white border-r border-slate-100 flex flex-col order-1 md:order-2 z-10 md:h-full overflow-hidden">
+      <aside className="w-full md:w-80 lg:w-96 bg-white border-r border-slate-100 flex flex-col order-1 md:order-2 z-10 md:h-full overflow-hidden shadow-2xl md:shadow-none">
         <div className="p-6 space-y-6 flex-1 overflow-y-auto">
           {/* My Location Section */}
           <div className={`p-6 rounded-[32px] border-2 transition-all duration-500 ${isStale ? 'bg-amber-50 border-amber-100' : 'bg-[#f7f2fa] border-transparent'}`}>
-            <h2 className="font-bold text-slate-900 mb-4 flex items-center justify-between">
-              My Status
-              {isStale && <span className="bg-amber-500 text-[9px] text-white px-2 py-0.5 rounded-full font-black uppercase animate-pulse">Outdated</span>}
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-slate-900">My Status</h2>
+              {isStale && <span className="bg-amber-500 text-[9px] text-white px-2 py-0.5 rounded-full font-black uppercase animate-pulse">Update Needed</span>}
+            </div>
             
             <input
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="What's happening?"
-              className="w-full px-5 py-3 bg-white border border-slate-100 rounded-2xl text-xs mb-4 outline-none focus:ring-2 focus:ring-[#6750a4]/10 transition-all"
+              placeholder="Where are you going?"
+              className="w-full px-5 py-3 bg-white border border-slate-100 rounded-2xl text-xs mb-4 outline-none focus:ring-2 focus:ring-[#6750a4]/10 transition-all placeholder:text-slate-300"
             />
             
             <button
               onClick={handleUpdate}
               disabled={logging}
-              className={`w-full py-4 rounded-full font-bold text-xs uppercase tracking-widest shadow-lg shadow-indigo-100/50 transition-all active:scale-95 disabled:opacity-50 ${isStale ? 'bg-amber-500 hover:bg-amber-600' : 'bg-[#6750a4] hover:bg-[#7e6bb4]'} text-white flex items-center justify-center gap-3`}
+              className={`w-full py-4 rounded-full font-bold text-xs uppercase tracking-[0.15em] shadow-lg shadow-indigo-100/50 transition-all active:scale-95 disabled:opacity-50 ${isStale ? 'bg-amber-500 hover:bg-amber-600' : 'bg-[#6750a4] hover:bg-[#7e6bb4]'} text-white flex items-center justify-center gap-3`}
             >
               {logging ? (
                 <div className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full"></div>
@@ -234,16 +252,16 @@ const LocationsView: React.FC = () => {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                   </svg>
-                  <span>Update Location</span>
+                  <span>Update My Spot</span>
                 </>
               )}
             </button>
 
-            {/* Public Sharing Control */}
+            {/* Public Sharing Toggle (Universal User Setting) */}
             <div className="mt-6 pt-6 border-t border-black/5">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Public Sharing</span>
+                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Global Share</span>
                   <span className="text-[9px] text-slate-400">Share with anyone via link</span>
                 </div>
                 <button 
@@ -264,33 +282,33 @@ const LocationsView: React.FC = () => {
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
-                      Copied!
+                      Copied Link
                     </>
                   ) : (
                     <>
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                       </svg>
-                      Copy Public Link
+                      Copy Share Link
                     </>
                   )}
                 </button>
               )}
             </div>
-            {error && <p className="mt-3 text-[10px] text-rose-500 font-bold uppercase tracking-tight text-center">{error}</p>}
+            {error && <p className="mt-3 text-[10px] text-rose-500 font-bold uppercase tracking-tight text-center bg-rose-50 p-2 rounded-xl border border-rose-100">{error}</p>}
           </div>
           
-          {/* Circle List */}
+          {/* List of Other Users */}
           <div className="space-y-4 pb-12">
-            <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 px-2 flex justify-between items-center">
-              Active Circle
-              <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[9px] normal-case tracking-normal">{allLocations.length} active</span>
-            </h3>
+            <div className="px-2 flex justify-between items-center">
+              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Trusted Circle</h3>
+              <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[9px] font-bold">{allLocations.length} active</span>
+            </div>
             
             <div className="space-y-3">
               {allLocations.map(loc => {
                  const isMe = loc.user === user?.id;
-                 const userName = loc.expand?.user?.name || loc.expand?.user?.email?.split('@')[0] || "Member";
+                 const userName = loc.expand?.user?.name || loc.expand?.user?.email?.split('@')[0] || "User";
                  const avatarUrl = loc.expand?.user?.avatar 
                   ? pb.files.getURL(loc.expand.user, loc.expand.user.avatar, { thumb: '100x100' })
                   : null;
@@ -303,7 +321,7 @@ const LocationsView: React.FC = () => {
                       className="group p-4 bg-slate-50/50 hover:bg-[#6750a4]/5 rounded-3xl border border-transparent hover:border-[#6750a4]/10 transition-all cursor-pointer flex items-center gap-4"
                     >
                       <div className="relative shrink-0">
-                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white font-bold text-sm overflow-hidden ${isMe ? 'bg-[#6750a4]' : 'bg-slate-900 shadow-sm'}`}>
+                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white font-bold text-sm overflow-hidden ${isMe ? 'bg-[#6750a4]' : 'bg-slate-900 shadow-sm group-hover:shadow-md'}`}>
                           {avatarUrl ? <img src={avatarUrl} className="w-full h-full object-cover" /> : userName.charAt(0).toUpperCase()}
                         </div>
                         <div className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${hoursOld >= 24 ? 'bg-amber-400' : 'bg-green-400'}`}></div>
@@ -313,21 +331,25 @@ const LocationsView: React.FC = () => {
                           <p className="text-xs font-bold text-slate-900 truncate">{isMe ? 'You' : userName}</p>
                           <p className="text-[9px] text-slate-400 font-medium whitespace-nowrap ml-2">{formatDistanceToNow(new Date(loc.updated), { addSuffix: true })}</p>
                         </div>
-                        {loc.note && <p className="text-[10px] text-slate-500 truncate leading-tight font-medium">"{escapeHTML(loc.note)}"</p>}
+                        {loc.note ? (
+                          <p className="text-[10px] text-slate-500 truncate leading-tight font-medium">"{escapeHTML(loc.note)}"</p>
+                        ) : (
+                          <p className="text-[10px] text-slate-300 italic">No note added</p>
+                        )}
                       </div>
                     </div>
                  );
               })}
               
               {!loading && allLocations.length === 0 && (
-                <div className="py-20 flex flex-col items-center justify-center text-center px-6">
-                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="py-20 flex flex-col items-center justify-center text-center px-6 border-2 border-dashed border-slate-100 rounded-[40px]">
+                  <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                     </svg>
                   </div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Your circle is quiet</p>
-                  <p className="text-[10px] text-slate-300 mt-1 max-w-[140px]">Invite others to share their status with you.</p>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nothing to show</p>
+                  <p className="text-[10px] text-slate-300 mt-2 max-w-[160px]">Update your location or invite friends to join your circle.</p>
                 </div>
               )}
             </div>
@@ -340,7 +362,7 @@ const LocationsView: React.FC = () => {
               <Link to="/privacy" className="text-[10px] uppercase font-black text-slate-300 hover:text-[#6750a4] transition-colors tracking-widest">Privacy</Link>
               <Link to="/terms" className="text-[10px] uppercase font-black text-slate-300 hover:text-[#6750a4] transition-colors tracking-widest">Terms</Link>
            </div>
-           <span className="text-[9px] font-black text-slate-200 uppercase tracking-tighter">Last Seen v1.2</span>
+           <span className="text-[9px] font-black text-slate-200 uppercase tracking-tighter">Last Seen v1.2.1</span>
         </footer>
       </aside>
     </div>

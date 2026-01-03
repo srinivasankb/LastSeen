@@ -5,6 +5,7 @@ import { pb, isAuthenticated } from './lib/pocketbase';
 import Dashboard from './components/Dashboard';
 import LegalPage from './components/LegalPage';
 import LandingPage from './components/LandingPage';
+import PublicLocationView from './components/PublicLocationView';
 
 const MainView: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(isAuthenticated());
@@ -49,6 +50,7 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-white text-[#1c1b1f] selection:bg-[#6750a4]/10">
         <Routes>
           <Route path="/" element={<MainView />} />
+          <Route path="/share/:token" element={<PublicLocationView />} />
           <Route path="/privacy" element={<LegalPage title="Privacy Policy" type="privacy" />} />
           <Route path="/terms" element={<LegalPage title="Terms & Conditions" type="terms" />} />
           <Route path="/guide" element={<LegalPage title="User Guide" type="guide" />} />

@@ -24,6 +24,7 @@ interface LocationLog {
       name: string;
       email: string;
       avatar: string;
+      public_token?: string;
     }
   }
 }
@@ -61,6 +62,11 @@ const LocationsView: React.FC = () => {
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [newName, setNewName] = useState(pb.authStore.record?.name || '');
   
+  // Public Link State
+  const [publicToken, setPublicToken] = useState<string | null>(pb.authStore.record?.public_token || null);
+  const [showShareOptions, setShowShareOptions] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState(false);
+  
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<any>(null);
   const clusterLayer = useRef<any>(null);
@@ -92,9 +98,13 @@ const LocationsView: React.FC = () => {
 
       const myId = pb.authStore.record?.id;
       
-      // --- Background Cleanup Process ---
-      // Identify records belonging to the current user that have passed their expiration time.
+      // Update local user token if it changed remotely
       if (myId) {
+        const freshUser = await pb.collection('users').getOne(myId);
+        setPublicToken(freshUser.public_token || null);
+        
+        // --- Background Cleanup Process ---
+        // Identify records belonging to the current user that have passed their expiration time.
         const myExpiredRecords = records.filter(r => 
           r.user === myId && r.expiresAt && isPast(new Date(r.expiresAt))
         );
@@ -109,7 +119,6 @@ const LocationsView: React.FC = () => {
       // ----------------------------------
 
       // Filter out my expired records from state so the UI updates immediately
-      // (Even if the DB delete is still processing in the background)
       const validRecords = records.filter(r => {
         if (myId && r.user === myId && r.expiresAt && isPast(new Date(r.expiresAt))) return false;
         return true;
@@ -149,6 +158,42 @@ const LocationsView: React.FC = () => {
     } catch (err) {
       setError("Profile update failed.");
     }
+  };
+
+  const generatePublicLink = async () => {
+    if (!user) return;
+    setLogging(true);
+    try {
+        const token = crypto.randomUUID();
+        await pb.collection('users').update(user.id, { public_token: token });
+        setPublicToken(token);
+    } catch (err) {
+        setError("Failed to generate link.");
+    } finally {
+        setLogging(false);
+    }
+  };
+
+  const deletePublicLink = async () => {
+    if (!user) return;
+    setLogging(true);
+    try {
+        await pb.collection('users').update(user.id, { public_token: "" });
+        setPublicToken(null);
+        setShowShareOptions(false);
+    } catch (err) {
+        setError("Failed to revoke link.");
+    } finally {
+        setLogging(false);
+    }
+  };
+
+  const copyToClipboard = () => {
+      if (!publicToken) return;
+      const url = `${window.location.origin}/#/share/${publicToken}`;
+      navigator.clipboard.writeText(url);
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 2000);
   };
 
   useEffect(() => {
@@ -263,24 +308,21 @@ const LocationsView: React.FC = () => {
 
     const marker = markerRefs.current[userId];
     if (marker && clusterLayer.current) {
-      // Small delay to ensure flyTo has started/progressed before spiderfying if needed
       setTimeout(() => {
         clusterLayer.current.zoomToShowLayer(marker, () => {
           marker.openPopup();
         });
-      }, 1600); // slightly longer than duration to be safe
+      }, 1600);
     }
   };
 
   const getReadableAddress = async (lat: number, lng: number): Promise<string> => {
     try {
-      // Fetch English name specifically
       const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&accept-language=en`);
       if (!res.ok) return "";
       const data = await res.json();
       const addr = data.address;
       
-      // Prefer English hierarchy
       const city = addr.city || addr.town || addr.village || addr.county || addr.state || "";
       const country = addr.country_code ? addr.country_code.toUpperCase() : "";
       
@@ -304,7 +346,6 @@ const LocationsView: React.FC = () => {
              expiresAt = addMinutes(now, expiryMinutes).toISOString();
           }
 
-          // Fetch address only during update to save API calls on read
           const address = await getReadableAddress(pos.coords.latitude, pos.coords.longitude);
 
           const data = { 
@@ -312,7 +353,7 @@ const LocationsView: React.FC = () => {
             lat: pos.coords.latitude, 
             lng: pos.coords.longitude, 
             note: note.trim(),
-            address: address, // Store the resolved address
+            address: address, 
             expiresAt: expiresAt 
           };
 
@@ -400,9 +441,42 @@ const LocationsView: React.FC = () => {
             {currentUserLoc && <button onClick={handleDelete} disabled={logging} className="mt-2 w-full h-10 flex items-center justify-center gap-2 text-[10px] font-bold text-rose-500 hover:bg-rose-50 rounded-xl transition-all uppercase tracking-widest disabled:opacity-50">Stop Sharing</button>}
           </div>
 
+          {/* Public Sharing Control */}
+          <div className="px-1">
+             <button onClick={() => setShowShareOptions(!showShareOptions)} className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-[#6750a4] transition-colors mb-2">
+                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                 Share Live Location
+             </button>
+             
+             {showShareOptions && (
+                 <div className="p-5 bg-indigo-50/50 rounded-[28px] border border-indigo-100 animate-in slide-in-from-top-2">
+                    {publicToken ? (
+                        <>
+                           <p className="text-[10px] text-slate-500 font-medium mb-3 leading-relaxed">Anyone with this link can view your last active location without signing in.</p>
+                           <div className="flex gap-2 mb-3">
+                               <input readOnly value={`${window.location.origin}/#/share/${publicToken}`} className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10px] text-slate-500 font-mono outline-none" />
+                               <button onClick={copyToClipboard} className="bg-white border border-slate-200 text-[#6750a4] rounded-xl px-3 py-2 hover:bg-indigo-50 transition-colors">
+                                  {copyFeedback ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}
+                               </button>
+                           </div>
+                           <div className="flex gap-2">
+                               <button onClick={generatePublicLink} disabled={logging} className="flex-1 py-2 text-[10px] font-bold uppercase text-[#6750a4] bg-white border border-[#6750a4]/20 rounded-xl hover:bg-[#6750a4]/5 transition-colors">Regenerate</button>
+                               <button onClick={deletePublicLink} disabled={logging} className="flex-1 py-2 text-[10px] font-bold uppercase text-rose-500 bg-white border border-rose-200 rounded-xl hover:bg-rose-50 transition-colors">Disable</button>
+                           </div>
+                        </>
+                    ) : (
+                        <div className="text-center py-2">
+                            <p className="text-[11px] text-slate-600 mb-4">Create a unique public link to share your location with friends who don't have the app.</p>
+                            <button onClick={generatePublicLink} disabled={logging} className="w-full py-3 bg-[#6750a4] text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-[#7e6bb4] active:scale-95 transition-all">Create Public Link</button>
+                        </div>
+                    )}
+                 </div>
+             )}
+          </div>
+
           {error && <div className="p-3 bg-rose-50 border border-rose-100 text-rose-600 text-[10px] font-bold rounded-xl animate-in fade-in">{error}</div>}
           
-          {/* Recent Activity List (Replaces Sidebar Tab) */}
+          {/* Recent Activity List */}
           <div className="space-y-4 pb-8">
             <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 px-2">Recent Community Updates</h3>
             <div className="space-y-2">
@@ -410,7 +484,6 @@ const LocationsView: React.FC = () => {
                   const isMe = loc.user === user?.id;
                   const userName = loc.expand?.user?.name || loc.expand?.user?.email?.split('@')[0] || "User";
                   const hoursDiff = differenceInHours(new Date(), new Date(loc.updated));
-                  // Use stored address if available
                   const address = loc.address;
                   
                   let percentRemaining = 100;

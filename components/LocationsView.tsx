@@ -296,7 +296,8 @@ export default function LocationsView() {
                ${isPrivate ? '<span class="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-normal border border-slate-200">Hidden</span>' : ''}
             </p>
             <p class="text-[10px] text-[#6750a4] mb-2 font-medium">${formatDistanceToNow(new Date(loc.updated), { addSuffix: true })}</p>
-            ${loc.note ? `<p class="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 break-words">"${escapeHTML(loc.note)}"</p>` : ''}
+            ${loc.note ? `<p class="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 break-words mb-2">"${escapeHTML(loc.note)}"</p>` : ''}
+            ${loc.address ? `<p class="text-[10px] text-slate-500 flex items-center justify-center gap-1"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>${escapeHTML(loc.address)}</p>` : ''}
           </div>
         `, { closeButton: false, className: 'custom-popup' });
         
@@ -330,14 +331,22 @@ export default function LocationsView() {
 
   const getReadableAddress = async (lat: number, lng: number): Promise<string> => {
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&accept-language=en`);
+      // Zoom 14 gives neighborhood/suburb/village level details which is better for "properly shown" addresses
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14&accept-language=en`);
       if (!res.ok) return "";
       const data = await res.json();
       const addr = data.address;
-      const city = addr.city || addr.town || addr.village || addr.county || addr.state || "";
-      const country = addr.country_code ? addr.country_code.toUpperCase() : "";
-      if (city && country) return `${city}, ${country}`;
-      return city || country || "";
+      
+      // Construct a more meaningful address
+      const locality = addr.suburb || addr.neighbourhood || addr.village || addr.town || addr.city || "";
+      const region = addr.county || addr.state || addr.country || "";
+      
+      if (locality && region) {
+          // Avoid duplication if city and county are same
+          if (locality === region) return locality;
+          return `${locality}, ${region}`;
+      }
+      return locality || region || "Unknown Location";
     } catch (e) { return ""; }
   };
 
@@ -577,7 +586,15 @@ export default function LocationsView() {
                                 </span>
                                 <span className="text-[10px] text-slate-400 font-bold tabular-nums">{formatDistanceToNow(new Date(loc.updated))}</span>
                             </div>
-                            <p className="text-xs text-slate-500 truncate leading-relaxed">{loc.note || loc.address || "Active on map"}</p>
+                            <div className="flex flex-col gap-0.5">
+                                {loc.note && (
+                                    <p className="text-xs text-slate-900 font-medium truncate">"{loc.note}"</p>
+                                )}
+                                <p className="text-[11px] text-slate-500 truncate flex items-center gap-1">
+                                    <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                    {loc.address || "Location logged"}
+                                </p>
+                            </div>
                         </div>
                     </button>
                 )

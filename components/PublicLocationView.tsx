@@ -101,7 +101,23 @@ const PublicLocationView: React.FC = () => {
                     <div>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Location Of</p>
                         <h1 className="text-xl font-bold text-slate-900">{targetUser?.name || 'User'}</h1>
-                        {targetLocation && <p className="text-xs text-[#6750a4] font-medium mt-0.5">Updated {formatDistanceToNow(new Date(targetLocation.updated))} ago</p>}
+                        
+                        {targetLocation?.note && (
+                            <p className="text-sm font-medium text-slate-900 mt-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 inline-block">
+                                "{targetLocation.note}"
+                            </p>
+                        )}
+
+                        {targetLocation?.address && (
+                            <div className="flex items-center gap-1.5 mt-3 text-slate-600">
+                                <div className="w-6 h-6 rounded-full bg-indigo-50 flex items-center justify-center shrink-0 text-[#6750a4]">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                </div>
+                                <span className="text-sm font-medium">{targetLocation.address}</span>
+                            </div>
+                        )}
+
+                        {targetLocation && <p className="text-[11px] text-slate-400 font-bold mt-2 ml-1">Updated {formatDistanceToNow(new Date(targetLocation.updated))} ago</p>}
                     </div>
                 </div>
             )}

@@ -44,7 +44,6 @@ const PublicLocationView: React.FC = () => {
 
     try {
         // 1. Find User by Token
-        // NOTE: This requires the 'users' collection API Rule to allow listing if 'public_token' matches.
         const users = await pb.collection('users').getList(1, 1, {
             filter: `public_token = "${token}"`
         });
@@ -65,7 +64,6 @@ const PublicLocationView: React.FC = () => {
 
         // 2. Find Location by User ID
         try {
-             // NOTE: This requires 'locations' collection API Rule to allow reading if user has a public_token.
              const locations = await pb.collection('locations').getList<LocationLog>(1, 1, {
                  filter: `user = "${userRec.id}"`,
                  sort: '-updated'
@@ -103,6 +101,9 @@ const PublicLocationView: React.FC = () => {
 
   // Map Init
   useEffect(() => {
+      // Only initialize map if not loading and mapRef is attached to DOM
+      if (loading) return;
+
       if (mapRef.current && !leafletMap.current && typeof L !== 'undefined') {
           leafletMap.current = L.map(mapRef.current, {
               zoomControl: false,
@@ -112,13 +113,15 @@ const PublicLocationView: React.FC = () => {
           L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 20 }).addTo(leafletMap.current);
           L.control.zoom({ position: 'bottomright' }).addTo(leafletMap.current);
       }
+      
+      // Cleanup on unmount
       return () => {
           if (leafletMap.current) {
               leafletMap.current.remove();
               leafletMap.current = null;
           }
       };
-  }, []);
+  }, [loading]); // Added loading dependency to ensure mapRef is available
 
   // Update Map Marker
   useEffect(() => {
@@ -161,7 +164,7 @@ const PublicLocationView: React.FC = () => {
           markerRef.current.openPopup();
           leafletMap.current.flyTo([targetLocation.lat, targetLocation.lng], 16, { duration: 1.5 });
       }
-  }, [targetLocation, targetUser]);
+  }, [targetLocation, targetUser, loading]);
 
 
   if (loading) {
@@ -197,7 +200,7 @@ const PublicLocationView: React.FC = () => {
                 <h1 className="text-lg font-bold text-[#1c1b1f] tracking-tight">Last Seen</h1>
             </div>
             <Link to="/" className="text-sm font-bold text-[#6750a4] hover:bg-[#6750a4]/5 px-4 py-2 rounded-full transition-colors">
-                Get App
+                Use App
             </Link>
         </header>
 
@@ -239,6 +242,18 @@ const PublicLocationView: React.FC = () => {
                                      <p className="text-sm text-slate-500">{targetLocation.address}</p>
                                  </div>
                             )}
+
+                            <a 
+                                href={`https://www.google.com/maps/search/?api=1&query=${targetLocation.lat},${targetLocation.lng}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-4 flex items-center justify-center gap-2 w-full py-3 bg-[#6750a4] text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-[#7e6bb4] transition-all active:scale-95 shadow-lg shadow-indigo-100"
+                            >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                </svg>
+                                Open in Maps
+                            </a>
                         </div>
                     ) : (
                         <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 text-amber-700 text-xs font-bold text-center">

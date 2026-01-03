@@ -44,7 +44,7 @@ const escapeHTML = (str: string | undefined): string => {
   return div.innerHTML;
 };
 
-const LocationsView: React.FC = () => {
+export default function LocationsView() {
   const [allLocations, setAllLocations] = useState<LocationLog[]>([]);
   const [currentUserLoc, setCurrentUserLoc] = useState<LocationLog | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,6 +56,7 @@ const LocationsView: React.FC = () => {
   const [isStale, setIsStale] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [newName, setNewName] = useState(pb.authStore.record?.name || '');
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Public Link State
   const [publicToken, setPublicToken] = useState<string | null>(pb.authStore.record?.public_token || null);
@@ -71,6 +72,7 @@ const LocationsView: React.FC = () => {
   const user = pb.authStore.record;
 
   const latestLocations = useMemo(() => {
+    // Client-side deduplication based on fetched records
     const uniqueMap: Record<string, LocationLog> = {};
     allLocations.forEach(loc => {
       // 1. Check expiration (visual filter)
@@ -83,21 +85,53 @@ const LocationsView: React.FC = () => {
     return Object.values(uniqueMap).sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime());
   }, [allLocations]);
 
+  // Filter for Search
+  const filteredLocations = useMemo(() => {
+    if (!searchQuery.trim()) return latestLocations;
+    const lowerQuery = searchQuery.toLowerCase();
+    return latestLocations.filter(loc => {
+        const userName = loc.expand?.user?.name || loc.expand?.user?.email || "";
+        const address = loc.address || "";
+        return userName.toLowerCase().includes(lowerQuery) || address.toLowerCase().includes(lowerQuery);
+    });
+  }, [latestLocations, searchQuery]);
+
   const fetchData = async () => {
     try {
-      const records = await pb.collection('locations').getFullList<LocationLog>({
+      const myId = pb.authStore.record?.id;
+
+      // Scalability: Only fetch latest 50 records to save bandwidth/API
+      const result = await pb.collection('locations').getList<LocationLog>(1, 50, {
         sort: '-updated',
         expand: 'user',
         requestKey: null,
       });
-
-      const myId = pb.authStore.record?.id;
       
+      let records = result.items;
+      let myLoc = records.find(r => r.user === myId);
+
+      // If current user is not in the top 50, fetch them specifically so they can update their status
+      if (myId && !myLoc) {
+        try {
+            const myRecordsList = await pb.collection('locations').getList<LocationLog>(1, 1, {
+                filter: `user = "${myId}"`,
+                expand: 'user',
+                requestKey: null
+            });
+            if (myRecordsList.items.length > 0) {
+                myLoc = myRecordsList.items[0];
+                records = [...records, myLoc]; 
+            }
+        } catch (e) {
+            console.error("Could not fetch my record", e);
+        }
+      }
+
       if (myId) {
         const freshUser = await pb.collection('users').getOne(myId);
         setPublicToken(freshUser.public_token || null);
         
-        // Background Cleanup
+        // Background Cleanup for owned expired records
         const myExpiredRecords = records.filter(r => 
           r.user === myId && r.expiresAt && isPast(new Date(r.expiresAt))
         );
@@ -108,6 +142,7 @@ const LocationsView: React.FC = () => {
         }
       }
 
+      // Filter out expired records for display state
       const validRecords = records.filter(r => {
         if (myId && r.user === myId && r.expiresAt && isPast(new Date(r.expiresAt))) return false;
         return true;
@@ -115,7 +150,6 @@ const LocationsView: React.FC = () => {
 
       setAllLocations(validRecords);
       
-      const myLoc = validRecords.find(r => r.user === myId);
       if (myLoc) {
         setCurrentUserLoc(myLoc);
         if (note === '') setNote(myLoc.note || '');
@@ -185,7 +219,7 @@ const LocationsView: React.FC = () => {
       }).setView([20, 0], 2);
       
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 20 }).addTo(leafletMap.current);
-      L.control.zoom({ position: 'topleft' }).addTo(leafletMap.current); 
+      L.control.zoom({ position: 'topright' }).addTo(leafletMap.current); 
 
       if (L.markerClusterGroup) {
         clusterLayer.current = L.markerClusterGroup({
@@ -221,7 +255,7 @@ const LocationsView: React.FC = () => {
       markerRefs.current = {};
       const bounds = L.latLngBounds([]);
       
-      latestLocations.forEach(loc => {
+      filteredLocations.forEach(loc => {
         const userName = loc.expand?.user?.name || loc.expand?.user?.email?.split('@')[0] || "User";
         const isMe = loc.user === pb.authStore.record?.id;
         const isPrivate = loc.isPublic === false;
@@ -271,12 +305,12 @@ const LocationsView: React.FC = () => {
         bounds.extend([loc.lat, loc.lng]);
       });
 
-      if (latestLocations.length > 0 && !hasFitBounds.current) {
+      if (filteredLocations.length > 0 && !hasFitBounds.current) {
         leafletMap.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
         hasFitBounds.current = true;
       }
     }
-  }, [latestLocations]);
+  }, [filteredLocations]);
 
   const resetView = () => {
     if (latestLocations.length > 0 && leafletMap.current) {
@@ -355,28 +389,17 @@ const LocationsView: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col md:flex-row bg-white overflow-hidden relative">
-      {/* Map Section */}
-      <div className="flex-1 relative order-1 h-full w-full">
-        <div ref={mapRef} className="w-full h-full" style={{minHeight: '400px'}} />
-        <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">
-            <button onClick={resetView} aria-label="Reset Map View" className="bg-white p-3 rounded-full shadow-lg text-slate-600 hover:text-[#6750a4] active:scale-95 transition-all focus:outline-none focus:ring-2 focus:ring-[#6750a4]">
-                {/* Updated Icon: Fit to Screen / Corners */}
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
-            </button>
-        </div>
-      </div>
-
-      {/* Sidebar / Bottom Sheet */}
-      <aside className="w-full md:w-[400px] bg-white border-t md:border-t-0 md:border-r border-slate-200 flex flex-col order-2 z-20 h-[50vh] md:h-full shadow-[0_-5px_20px_rgba(0,0,0,0.1)] md:shadow-none absolute bottom-0 md:relative rounded-t-[32px] md:rounded-none transition-all">
+      {/* Sidebar - Relative on mobile to prevent map obstruction */}
+      <aside className="w-full md:w-[420px] lg:w-[480px] bg-white border-t md:border-t-0 md:border-r border-slate-200 flex flex-col order-2 md:order-1 z-20 h-[45vh] md:h-full shadow-[0_-5px_20px_rgba(0,0,0,0.1)] md:shadow-none relative">
         
         {/* Handle for resizing on mobile (visual cue) */}
-        <div className="w-full h-6 flex items-center justify-center md:hidden shrink-0">
+        <div className="w-full h-6 flex items-center justify-center md:hidden shrink-0 cursor-grab active:cursor-grabbing">
              <div className="w-12 h-1.5 bg-slate-200 rounded-full mt-2"></div>
         </div>
 
-        <div className="p-5 md:p-6 space-y-6 flex-1 overflow-y-auto">
+        <div className="p-5 md:p-8 space-y-6 flex-1 overflow-y-auto">
           {/* Controls Area */}
-          <div className="bg-slate-50 p-5 rounded-[24px] border border-slate-100 shadow-sm">
+          <div className="bg-slate-50 p-6 rounded-[24px] border border-slate-100 shadow-sm">
             <div className="flex justify-between items-center mb-4">
                  <h2 className="text-sm font-bold text-slate-800">My Status</h2>
                  <button onClick={() => setShowProfileEdit(!showProfileEdit)} className="text-[10px] font-bold text-[#6750a4] uppercase tracking-wider hover:underline focus:outline-none focus:text-indigo-800">
@@ -406,10 +429,10 @@ const LocationsView: React.FC = () => {
                 value={note} 
                 onChange={(e) => setNote(e.target.value)} 
                 placeholder="What are you doing?" 
-                className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-500 mb-4 outline-none focus:ring-2 focus:ring-[#6750a4] focus:border-transparent transition-all shadow-sm" 
+                className="w-full px-5 py-4 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-500 mb-5 outline-none focus:ring-2 focus:ring-[#6750a4] focus:border-transparent transition-all shadow-sm" 
             />
             
-            <div className="grid grid-cols-2 gap-3 mb-5">
+            <div className="grid grid-cols-2 gap-4 mb-6">
                  {/* Expiry Selector */}
                  <div className="relative">
                     <label htmlFor="expiry-select" className="sr-only">Expiration Time</label>
@@ -417,7 +440,7 @@ const LocationsView: React.FC = () => {
                         id="expiry-select"
                         value={expiryMinutes} 
                         onChange={(e) => setExpiryMinutes(Number(e.target.value))} 
-                        className="w-full appearance-none bg-white border border-slate-300 text-slate-900 text-[11px] font-bold rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-[#6750a4] cursor-pointer shadow-sm"
+                        className="w-full appearance-none bg-white border border-slate-300 text-slate-900 text-[11px] font-bold rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#6750a4] cursor-pointer shadow-sm"
                     >
                       {EXPIRY_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                     </select>
@@ -435,7 +458,6 @@ const LocationsView: React.FC = () => {
                         aria-pressed={isPublic}
                         aria-label="Set visibility to Community"
                     >
-                        {/* Updated Icon: Eye */}
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                         Community
                     </button>
@@ -451,7 +473,7 @@ const LocationsView: React.FC = () => {
                  </div>
             </div>
 
-            <button onClick={handleUpdate} disabled={logging} className="w-full py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider text-white bg-[#6750a4] shadow-lg shadow-indigo-100 hover:bg-[#5a4491] active:scale-95 transition-all flex justify-center items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#6750a4]">
+            <button onClick={handleUpdate} disabled={logging} className="w-full py-4 rounded-xl font-bold text-sm uppercase tracking-wider text-white bg-[#6750a4] shadow-lg shadow-indigo-100 hover:bg-[#5a4491] active:scale-95 transition-all flex justify-center items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#6750a4]">
               {logging ? (
                   <>
                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -478,12 +500,12 @@ const LocationsView: React.FC = () => {
                 aria-expanded={showShareOptions}
               >
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-indigo-100 text-[#6750a4] flex items-center justify-center">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                    <div className="w-9 h-9 rounded-full bg-indigo-100 text-[#6750a4] flex items-center justify-center">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
                     </div>
                     <div>
-                        <span className="block text-xs font-bold text-slate-800">Share Unique Link</span>
-                        <span className="block text-[10px] text-slate-500">Visible to link holders even if unlisted</span>
+                        <span className="block text-sm font-bold text-slate-800">Share Unique Link</span>
+                        <span className="block text-[11px] text-slate-500">Visible to link holders even if unlisted</span>
                     </div>
                   </div>
                   <svg className={`w-4 h-4 text-slate-400 transition-transform ${showShareOptions ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
@@ -511,33 +533,51 @@ const LocationsView: React.FC = () => {
               )}
           </div>
 
+          {/* Search Bar */}
+          <div className="relative">
+             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+             </div>
+             <input 
+                type="text" 
+                placeholder="Search name or place..." 
+                className="w-full pl-11 pr-4 py-3 bg-slate-50 border-none rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-[#6750a4] outline-none transition-shadow"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+             />
+          </div>
+
           {/* List */}
           <div className="space-y-3 pb-8">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Nearby Activity</h3>
-            {latestLocations.length === 0 && !loading && (
-                <div className="text-center py-8 text-slate-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-slate-200">Map is quiet. Be the first to log!</div>
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">
+                Nearby Activity {searchQuery && `(${filteredLocations.length})`}
+            </h3>
+            {filteredLocations.length === 0 && !loading && (
+                <div className="text-center py-10 text-slate-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                    {searchQuery ? "No matches found." : "Map is quiet. Be the first to log!"}
+                </div>
             )}
-            {latestLocations.map(loc => {
+            {filteredLocations.map(loc => {
                 const isMe = loc.user === user?.id;
-                if (loc.isPublic === false && !isMe) return null; // Client side filter for unlisted
+                if (loc.isPublic === false && !isMe) return null; 
                 
                 const userName = loc.expand?.user?.name || "User";
                 const isUnlisted = loc.isPublic === false;
                 
                 return (
-                    <button key={loc.id} onClick={() => focusMember(loc.user, loc.lat, loc.lng)} className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors text-left group border border-transparent hover:border-slate-100">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold shadow-sm ${isMe ? 'bg-[#6750a4]' : 'bg-slate-800'}`}>
+                    <button key={loc.id} onClick={() => focusMember(loc.user, loc.lat, loc.lng)} className="w-full flex items-center gap-4 p-3 rounded-2xl hover:bg-slate-50 transition-colors text-left group border border-transparent hover:border-slate-100">
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-sm shrink-0 ${isMe ? 'bg-[#6750a4]' : 'bg-slate-800'}`}>
                            {loc.expand?.user?.avatar ? <img src={pb.files.getURL(loc.expand.user, loc.expand.user.avatar, {thumb:'100x100'})} className="w-full h-full object-cover rounded-xl"/> : userName.charAt(0).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-center mb-0.5">
-                                <span className="text-xs font-bold text-slate-900 truncate flex items-center gap-1">
+                            <div className="flex justify-between items-center mb-1">
+                                <span className="text-sm font-bold text-slate-900 truncate flex items-center gap-1.5">
                                     {isMe ? "You" : userName} 
-                                    {isUnlisted && <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-normal border border-slate-200">Hidden</span>}
+                                    {isUnlisted && <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold border border-slate-200 uppercase tracking-wider">Hidden</span>}
                                 </span>
-                                <span className="text-[9px] text-slate-400 font-bold tabular-nums">{formatDistanceToNow(new Date(loc.updated))}</span>
+                                <span className="text-[10px] text-slate-400 font-bold tabular-nums">{formatDistanceToNow(new Date(loc.updated))}</span>
                             </div>
-                            <p className="text-[11px] text-slate-500 truncate">{loc.note || loc.address || "Active on map"}</p>
+                            <p className="text-xs text-slate-500 truncate leading-relaxed">{loc.note || loc.address || "Active on map"}</p>
                         </div>
                     </button>
                 )
@@ -545,8 +585,17 @@ const LocationsView: React.FC = () => {
           </div>
         </div>
       </aside>
+
+      {/* Map Section */}
+      <div className="flex-1 relative order-1 md:order-2 h-full w-full min-h-0 bg-slate-50">
+        <div ref={mapRef} className="w-full h-full" />
+        {/* Reset Button - Moved to bottom right */}
+        <div className="absolute bottom-8 right-4 z-[1000] flex flex-col gap-2">
+            <button onClick={resetView} aria-label="Reset Map View" className="bg-white p-3 rounded-full shadow-lg text-slate-600 hover:text-[#6750a4] active:scale-95 transition-all focus:outline-none focus:ring-2 focus:ring-[#6750a4]">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+            </button>
+        </div>
+      </div>
     </div>
   );
 };
-
-export default LocationsView;

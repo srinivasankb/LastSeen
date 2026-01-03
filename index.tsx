@@ -6,7 +6,8 @@ import App from './App';
 // Service Worker Registration
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(err => {
+    // Use relative path to avoid origin mismatch in preview environments
+    navigator.serviceWorker.register('./sw.js').catch(err => {
       console.log('SW registration failed: ', err);
     });
   });

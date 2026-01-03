@@ -4,7 +4,6 @@ import { pb } from '../lib/pocketbase';
 import { differenceInHours, formatDistanceToNow, addMinutes, isPast } from 'date-fns';
 import { Link } from 'react-router-dom';
 
-// Access the global Leaflet instance populated by script tags in index.html
 declare const L: any;
 
 interface LocationLog {
@@ -15,9 +14,9 @@ interface LocationLog {
   updated: string;
   expiresAt?: string;
   note?: string;
-  address?: string; // Stored readable address
+  address?: string;
   user: string;
-  isPublic?: boolean; // New field
+  isPublic?: boolean; 
   expand?: {
     user: {
       id: string;
@@ -32,16 +31,10 @@ interface LocationLog {
 
 const EXPIRY_OPTIONS = [
   { label: 'Never expire', value: 0 },
-  { label: '15 minutes', value: 15 },
-  { label: '30 minutes', value: 30 },
   { label: '1 hour', value: 60 },
-  { label: '2 hours', value: 120 },
   { label: '4 hours', value: 240 },
-  { label: '8 hours', value: 480 },
   { label: '24 hours', value: 1440 },
-  { label: '3 days', value: 4320 },
   { label: '1 week', value: 10080 },
-  { label: '1 month', value: 43200 },
 ];
 
 const escapeHTML = (str: string | undefined): string => {
@@ -58,8 +51,8 @@ const LocationsView: React.FC = () => {
   const [logging, setLogging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState('');
-  const [expiryMinutes, setExpiryMinutes] = useState<number>(0); // Default 0 = Never
-  const [isPublic, setIsPublic] = useState<boolean>(true); // Default to Public
+  const [expiryMinutes, setExpiryMinutes] = useState<number>(0); 
+  const [isPublic, setIsPublic] = useState<boolean>(true); 
   const [isStale, setIsStale] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [newName, setNewName] = useState(pb.authStore.record?.name || '');
@@ -100,27 +93,21 @@ const LocationsView: React.FC = () => {
 
       const myId = pb.authStore.record?.id;
       
-      // Update local user token if it changed remotely
       if (myId) {
         const freshUser = await pb.collection('users').getOne(myId);
         setPublicToken(freshUser.public_token || null);
         
-        // --- Background Cleanup Process ---
-        // Identify records belonging to the current user that have passed their expiration time.
+        // Background Cleanup
         const myExpiredRecords = records.filter(r => 
           r.user === myId && r.expiresAt && isPast(new Date(r.expiresAt))
         );
-
         if (myExpiredRecords.length > 0) {
-          // Perform deletion in the background without blocking UI
           Promise.all(myExpiredRecords.map(r => 
-            pb.collection('locations').delete(r.id).catch(err => console.error("Auto-cleanup failed:", err))
+            pb.collection('locations').delete(r.id).catch(err => console.error(err))
           ));
         }
       }
-      // ----------------------------------
 
-      // Filter out my expired records from state so the UI updates immediately
       const validRecords = records.filter(r => {
         if (myId && r.user === myId && r.expiresAt && isPast(new Date(r.expiresAt))) return false;
         return true;
@@ -131,23 +118,17 @@ const LocationsView: React.FC = () => {
       const myLoc = validRecords.find(r => r.user === myId);
       if (myLoc) {
         setCurrentUserLoc(myLoc);
-        // Only update these fields if we are NOT currently editing (simple check: if note is empty, assume sync)
         if (note === '') setNote(myLoc.note || '');
-        // Sync public state from DB if we aren't "in the middle" of a change (simplified here to always sync on load)
-        // Ideally we might want to check if the user has touched the control, but for now we sync.
-        setIsPublic(myLoc.isPublic !== false); // Default true if undefined
-        
+        setIsPublic(myLoc.isPublic !== false); 
         setIsStale(differenceInHours(new Date(), new Date(myLoc.updated)) >= 24);
       } else {
         setCurrentUserLoc(null);
         setIsStale(false);
       }
-
       setError(null);
     } catch (err: any) {
       if (err.name !== 'ClientResponseError' || !err.isAbort) {
         console.error('Fetch error:', err);
-        setError("Sync failed. Check connection.");
       }
     } finally {
       setLoading(false);
@@ -180,20 +161,6 @@ const LocationsView: React.FC = () => {
     }
   };
 
-  const deletePublicLink = async () => {
-    if (!user) return;
-    setLogging(true);
-    try {
-        await pb.collection('users').update(user.id, { public_token: "" });
-        setPublicToken(null);
-        setShowShareOptions(false);
-    } catch (err) {
-        setError("Failed to revoke link.");
-    } finally {
-        setLogging(false);
-    }
-  };
-
   const copyToClipboard = () => {
       if (!publicToken) return;
       const url = `${window.location.origin}/#/share/${publicToken}`;
@@ -218,16 +185,12 @@ const LocationsView: React.FC = () => {
       }).setView([20, 0], 2);
       
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 20 }).addTo(leafletMap.current);
-      L.control.zoom({ position: 'bottomright' }).addTo(leafletMap.current);
+      L.control.zoom({ position: 'topleft' }).addTo(leafletMap.current); 
 
       if (L.markerClusterGroup) {
         clusterLayer.current = L.markerClusterGroup({
           showCoverageOnHover: false,
-          spiderfyOnMaxZoom: true,
-          removeOutsideVisibleBounds: true,
-          animate: true,
-          maxClusterRadius: 50,
-          spiderLegPolylineOptions: { weight: 1.5, color: '#6750a4', opacity: 0.5 },
+          maxClusterRadius: 40,
           iconCreateFunction: (cluster: any) => {
             const count = cluster.getChildCount();
             let sizeClass = 'cluster-small';
@@ -251,7 +214,7 @@ const LocationsView: React.FC = () => {
     };
   }, []);
 
-  // Marker Update Logic
+  // Marker Rendering
   useEffect(() => {
     if (clusterLayer.current && leafletMap.current && typeof L !== 'undefined') {
       clusterLayer.current.clearLayers();
@@ -262,43 +225,44 @@ const LocationsView: React.FC = () => {
         const userName = loc.expand?.user?.name || loc.expand?.user?.email?.split('@')[0] || "User";
         const isMe = loc.user === pb.authStore.record?.id;
         const isPrivate = loc.isPublic === false;
+        
+        // Skip rendering other users if they are private
+        if (isPrivate && !isMe) return;
+
         const avatarUrl = (loc.expand?.user?.id && loc.expand?.user?.avatar) ? pb.files.getURL(loc.expand.user, loc.expand.user.avatar, { thumb: '100x100' }) : null;
         const hoursDiff = differenceInHours(new Date(), new Date(loc.updated));
 
-        // Define status color
         let statusColor = hoursDiff >= 24 ? 'bg-amber-500' : 'bg-green-500';
-        // If it's me and it's private, show a different indicator color or shape
         if (isMe && isPrivate) statusColor = 'bg-slate-400';
 
         const icon = L.divIcon({
           className: 'custom-div-icon',
           html: `
             <div class="relative group">
-              <div class="w-12 h-12 ${isMe ? 'bg-[#6750a4]' : 'bg-slate-900'} rounded-2xl border-4 border-white shadow-xl flex items-center justify-center text-white text-xs font-bold overflow-hidden transition-all group-hover:scale-110 active:scale-90">
+              <div class="w-10 h-10 md:w-12 md:h-12 ${isMe ? 'bg-[#6750a4]' : 'bg-slate-900'} rounded-xl border-[3px] border-white shadow-lg flex items-center justify-center text-white text-[10px] md:text-xs font-bold overflow-hidden transition-all group-hover:scale-110">
                 ${avatarUrl ? `<img src="${avatarUrl}" class="w-full h-full object-cover" />` : userName.charAt(0).toUpperCase()}
                 ${isMe && isPrivate ? `
-                  <div class="absolute inset-0 bg-black/40 flex items-center justify-center">
-                    <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                  <div class="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
                   </div>
                 ` : ''}
               </div>
-              <div class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${statusColor}"></div>
+              <div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${statusColor}"></div>
             </div>
           `,
-          iconSize: [48, 48],
-          iconAnchor: [24, 24],
+          iconSize: [40, 40],
+          iconAnchor: [20, 20],
           popupAnchor: [0, -20]
         });
 
         const marker = L.marker([loc.lat, loc.lng], { icon }).bindPopup(`
-          <div class="p-4 text-center min-w-[160px]">
+          <div class="p-3 text-center min-w-[140px]">
             <p class="font-bold text-sm mb-1 text-slate-900 flex items-center justify-center gap-1">
                ${isMe ? 'My Location' : escapeHTML(userName)}
-               ${isPrivate ? '<svg class="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>' : ''}
+               ${isPrivate ? '<span class="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-normal border border-slate-200">Hidden</span>' : ''}
             </p>
-            <p class="text-[9px] font-black uppercase tracking-widest text-[#6750a4] mb-3">${formatDistanceToNow(new Date(loc.updated), { addSuffix: true })}</p>
-            ${loc.note ? `<p class="text-[11px] text-slate-500 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100 break-words">"${escapeHTML(loc.note)}"</p>` : ''}
-            ${isMe && isPrivate ? '<p class="text-[9px] text-slate-400 mt-2 font-medium">(Visible only to you & links)</p>' : ''}
+            <p class="text-[10px] text-[#6750a4] mb-2 font-medium">${formatDistanceToNow(new Date(loc.updated), { addSuffix: true })}</p>
+            ${loc.note ? `<p class="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 break-words">"${escapeHTML(loc.note)}"</p>` : ''}
           </div>
         `, { closeButton: false, className: 'custom-popup' });
         
@@ -323,17 +287,10 @@ const LocationsView: React.FC = () => {
 
   const focusMember = (userId: string, lat: number, lng: number) => {
     if (!leafletMap.current) return;
-    
-    // Smooth cinematic movement
-    leafletMap.current.flyTo([lat, lng], 17, { duration: 1.5, easeLinearity: 0.25 });
-
+    leafletMap.current.flyTo([lat, lng], 17, { duration: 1.5 });
     const marker = markerRefs.current[userId];
     if (marker && clusterLayer.current) {
-      setTimeout(() => {
-        clusterLayer.current.zoomToShowLayer(marker, () => {
-          marker.openPopup();
-        });
-      }, 1600);
+      setTimeout(() => clusterLayer.current.zoomToShowLayer(marker, () => marker.openPopup()), 1600);
     }
   };
 
@@ -343,15 +300,11 @@ const LocationsView: React.FC = () => {
       if (!res.ok) return "";
       const data = await res.json();
       const addr = data.address;
-      
       const city = addr.city || addr.town || addr.village || addr.county || addr.state || "";
       const country = addr.country_code ? addr.country_code.toUpperCase() : "";
-      
       if (city && country) return `${city}, ${country}`;
       return city || country || "";
-    } catch (e) {
-      return "";
-    }
+    } catch (e) { return ""; }
   };
 
   const handleUpdate = () => {
@@ -363,12 +316,9 @@ const LocationsView: React.FC = () => {
         try {
           const now = new Date();
           let expiresAt = "";
-          if (expiryMinutes > 0) {
-             expiresAt = addMinutes(now, expiryMinutes).toISOString();
-          }
+          if (expiryMinutes > 0) expiresAt = addMinutes(now, expiryMinutes).toISOString();
 
           const address = await getReadableAddress(pos.coords.latitude, pos.coords.longitude);
-
           const data = { 
             user: user?.id, 
             lat: pos.coords.latitude, 
@@ -376,7 +326,7 @@ const LocationsView: React.FC = () => {
             note: note.trim(),
             address: address, 
             expiresAt: expiresAt,
-            isPublic: isPublic // Send privacy setting
+            isPublic: isPublic 
           };
 
           if (currentUserLoc) await pb.collection('locations').update(currentUserLoc.id, data);
@@ -391,208 +341,209 @@ const LocationsView: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (!currentUserLoc) return;
-    if (!window.confirm("Are you sure you want to stop sharing?")) return;
+    if (!currentUserLoc || !window.confirm("Stop sharing your location?")) return;
     setLogging(true);
     try {
         await pb.collection('locations').delete(currentUserLoc.id);
         setCurrentUserLoc(null);
         setNote('');
-        setIsStale(false);
         setAllLocations(prev => prev.filter(l => l.id !== currentUserLoc.id));
         await fetchData();
-    } catch (err) { setError("Failed to delete location."); } 
+    } catch (err) { setError("Failed to delete."); } 
     finally { setLogging(false); }
   };
 
   return (
-    <div className="h-full flex flex-col md:flex-row bg-white overflow-hidden">
-      <div className="flex-1 relative order-1 h-[40vh] md:h-full">
-        <div ref={mapRef} className="w-full h-full" />
-        <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2">
-            <button onClick={resetView} className="bg-white/90 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-slate-100 hover:bg-white text-slate-600 transition-all active:scale-95">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+    <div className="h-full flex flex-col md:flex-row bg-white overflow-hidden relative">
+      {/* Map Section */}
+      <div className="flex-1 relative order-1 h-full w-full">
+        <div ref={mapRef} className="w-full h-full" style={{minHeight: '400px'}} />
+        <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">
+            <button onClick={resetView} aria-label="Reset Map View" className="bg-white p-3 rounded-full shadow-lg text-slate-600 hover:text-[#6750a4] active:scale-95 transition-all focus:outline-none focus:ring-2 focus:ring-[#6750a4]">
+                {/* Updated Icon: Fit to Screen / Corners */}
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
             </button>
         </div>
-        {loading && <div className="absolute inset-0 bg-white/50 backdrop-blur-[2px] z-[1000] flex items-center justify-center"><div className="w-10 h-10 border-4 border-[#6750a4]/20 border-t-[#6750a4] rounded-full animate-spin"></div></div>}
       </div>
 
-      <aside className="w-full md:w-80 lg:w-96 bg-white border-t md:border-t-0 md:border-r border-slate-100 flex flex-col order-2 z-10 h-[60vh] md:h-full overflow-hidden shadow-2xl md:shadow-none">
-        <div className="p-4 sm:p-6 space-y-6 flex-1 overflow-y-auto">
-          {/* User Profile Header */}
-          <div className="p-4 bg-slate-50 rounded-3xl border border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-3 overflow-hidden">
-               <div className="w-10 h-10 rounded-xl bg-[#6750a4]/10 flex items-center justify-center text-[#6750a4] font-bold shrink-0">{(user?.name || user?.email || 'U').charAt(0).toUpperCase()}</div>
-               <div className="min-w-0">
-                 <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Display Name</p>
-                 <p className="text-xs font-bold text-slate-900 truncate">{user?.name || user?.email?.split('@')[0]}</p>
-               </div>
-            </div>
-            <button onClick={() => setShowProfileEdit(!showProfileEdit)} className="text-[10px] font-bold text-[#6750a4] hover:bg-white px-3 py-1.5 rounded-lg border border-transparent hover:border-slate-100 transition-all shrink-0">Edit</button>
-          </div>
-
-          {showProfileEdit && (
-            <div className="p-4 bg-[#6750a4]/5 rounded-3xl border border-[#6750a4]/10 animate-in slide-in-from-top-2">
-               <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Display name..." className="w-full px-4 py-2 bg-white border border-slate-100 rounded-xl text-xs mb-3 focus:ring-2 focus:ring-[#6750a4] outline-none" />
-               <div className="flex gap-2">
-                 <button onClick={handleProfileUpdate} className="flex-1 py-2 bg-[#6750a4] text-white rounded-xl text-[10px] font-bold uppercase">Save</button>
-                 <button onClick={() => setShowProfileEdit(false)} className="px-4 py-2 text-slate-400 text-[10px] font-bold uppercase">Cancel</button>
-               </div>
-            </div>
-          )}
-
-          {/* Controls Area */}
-          <div className={`p-5 rounded-[32px] border-2 ${isStale ? 'bg-amber-50 border-amber-100' : 'bg-[#f7f2fa] border-transparent'}`}>
-            <h2 className="font-bold text-slate-900 mb-4 flex justify-between items-center text-sm">
-              My Current Spot
-              {isStale && <span className="text-[8px] bg-amber-500 text-white px-2 py-0.5 rounded-full uppercase tracking-widest font-black">Outdated</span>}
-            </h2>
-            <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="What are you up to?" className="w-full px-5 py-3.5 bg-white border border-slate-100 rounded-2xl text-sm mb-3 outline-none focus:ring-2 focus:ring-[#6750a4] transition-all" />
-            
-            <div className="mb-3">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1.5 block">Auto-remove after</label>
-              <div className="relative">
-                <select value={expiryMinutes} onChange={(e) => setExpiryMinutes(Number(e.target.value))} className="w-full appearance-none bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-2xl px-5 py-3 focus:outline-none focus:ring-2 focus:ring-[#6750a4] cursor-pointer">
-                  {EXPIRY_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg></div>
-              </div>
-            </div>
-
-            {/* Visibility Toggle */}
-            <div className="mb-4 flex gap-2">
-              <button 
-                onClick={() => setIsPublic(true)}
-                className={`flex-1 py-2.5 rounded-xl border flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-widest transition-all ${isPublic ? 'bg-white border-[#6750a4] text-[#6750a4] shadow-sm' : 'bg-transparent border-transparent text-slate-400 hover:bg-black/5'}`}
-              >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11.015a8 8 0 1015.928 8.169 17.026 17.026 0 00-3.4-9.282M3 11l.365-.797M21 21l-3.328-4.248M3 21l3.328-4.248M12 11a4 4 0 100 8 4 4 0 000-8z" /></svg>
-                Public
-              </button>
-              <button 
-                 onClick={() => setIsPublic(false)}
-                 className={`flex-1 py-2.5 rounded-xl border flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-widest transition-all ${!isPublic ? 'bg-white border-slate-300 text-slate-600 shadow-sm' : 'bg-transparent border-transparent text-slate-400 hover:bg-black/5'}`}
-              >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                Private
-              </button>
-            </div>
-
-            <button onClick={handleUpdate} disabled={logging} className={`w-full min-h-[52px] rounded-full font-bold text-xs uppercase tracking-widest text-white flex items-center justify-center gap-3 transition-all shadow-lg active:scale-95 ${isStale ? 'bg-amber-500 shadow-amber-100' : 'bg-[#6750a4] shadow-indigo-100'}`}>
-              {logging ? <div className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full"></div> : "Log My Spot"}
-            </button>
-            {currentUserLoc && <button onClick={handleDelete} disabled={logging} className="mt-2 w-full h-10 flex items-center justify-center gap-2 text-[10px] font-bold text-rose-500 hover:bg-rose-50 rounded-xl transition-all uppercase tracking-widest disabled:opacity-50">Stop Sharing</button>}
-          </div>
-
-          {/* Public Sharing Control */}
-          <div className="px-1">
-             <button onClick={() => setShowShareOptions(!showShareOptions)} className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-[#6750a4] transition-colors mb-2">
-                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
-                 Unique Link Sharing
-             </button>
-             
-             {showShareOptions && (
-                 <div className="p-5 bg-indigo-50/50 rounded-[28px] border border-indigo-100 animate-in slide-in-from-top-2">
-                    {publicToken ? (
-                        <>
-                           <p className="text-[10px] text-slate-500 font-medium mb-3 leading-relaxed">Anyone with this link can view your last active location, even if your spot is marked as "Private".</p>
-                           <div className="flex gap-2 mb-3">
-                               <input readOnly value={`${window.location.origin}/#/share/${publicToken}`} className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10px] text-slate-500 font-mono outline-none" />
-                               <button onClick={copyToClipboard} className="bg-white border border-slate-200 text-[#6750a4] rounded-xl px-3 py-2 hover:bg-indigo-50 transition-colors">
-                                  {copyFeedback ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}
-                               </button>
-                           </div>
-                           <div className="flex gap-2">
-                               <button onClick={generatePublicLink} disabled={logging} className="flex-1 py-2 text-[10px] font-bold uppercase text-[#6750a4] bg-white border border-[#6750a4]/20 rounded-xl hover:bg-[#6750a4]/5 transition-colors">Regenerate</button>
-                               <button onClick={deletePublicLink} disabled={logging} className="flex-1 py-2 text-[10px] font-bold uppercase text-rose-500 bg-white border border-rose-200 rounded-xl hover:bg-rose-50 transition-colors">Disable</button>
-                           </div>
-                        </>
-                    ) : (
-                        <div className="text-center py-2">
-                            <p className="text-[11px] text-slate-600 mb-4">Create a unique public link to share your location with friends who don't have the app.</p>
-                            <button onClick={generatePublicLink} disabled={logging} className="w-full py-3 bg-[#6750a4] text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-[#7e6bb4] active:scale-95 transition-all">Create Public Link</button>
-                        </div>
-                    )}
-                 </div>
-             )}
-          </div>
-
-          {error && <div className="p-3 bg-rose-50 border border-rose-100 text-rose-600 text-[10px] font-bold rounded-xl animate-in fade-in">{error}</div>}
-          
-          {/* Recent Activity List */}
-          <div className="space-y-4 pb-8">
-            <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 px-2">Recent Community Updates</h3>
-            <div className="space-y-2">
-                {latestLocations.map(loc => {
-                  const isMe = loc.user === user?.id;
-                  const isPrivate = loc.isPublic === false;
-                  // If it's private and not mine, don't show in list (double safety, though backend should filter)
-                  if (isPrivate && !isMe) return null;
-
-                  const userName = loc.expand?.user?.name || loc.expand?.user?.email?.split('@')[0] || "User";
-                  const hoursDiff = differenceInHours(new Date(), new Date(loc.updated));
-                  const address = loc.address;
-                  
-                  let percentRemaining = 100;
-                  if (loc.expiresAt) {
-                    const expiryTime = new Date(loc.expiresAt);
-                    const totalDuration = expiryTime.getTime() - new Date(loc.updated).getTime();
-                    const timeRemaining = expiryTime.getTime() - new Date().getTime();
-                    percentRemaining = Math.max(0, Math.min(100, (timeRemaining / totalDuration) * 100));
-                  }
-
-                  return (
-                      <button key={loc.id} onClick={() => focusMember(loc.user, loc.lat, loc.lng)} className="w-full p-4 bg-slate-50/50 hover:bg-[#6750a4]/5 hover:translate-x-1 border border-transparent hover:border-[#6750a4]/10 rounded-[24px] flex items-center gap-4 transition-all group">
-                        <div className="relative shrink-0 w-14 h-14 flex items-center justify-center">
-                          <svg className="absolute inset-0 w-full h-full -rotate-90 transform" viewBox="0 0 36 36">
-                            <path className="text-slate-200" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="2.5" />
-                            {percentRemaining > 0 && <path className={`${percentRemaining < 20 ? 'text-rose-400' : 'text-[#6750a4]'} transition-all duration-1000 ease-out`} strokeDasharray={`${percentRemaining}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />}
-                          </svg>
-                          <div className={`w-10 h-10 rounded-[14px] flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm z-10 ${isMe ? 'bg-[#6750a4]' : 'bg-slate-900'} relative overflow-hidden`}>
-                            {loc.expand?.user?.avatar ? <img src={pb.files.getURL(loc.expand.user, loc.expand.user.avatar, { thumb: '100x100' })} className="w-full h-full object-cover rounded-[14px]" /> : userName.charAt(0).toUpperCase()}
-                            {isMe && isPrivate && (
-                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                    <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                                </div>
-                            )}
-                          </div>
-                          <div className={`absolute bottom-1 right-1 z-20 w-3 h-3 rounded-full border-2 border-white ${isMe && isPrivate ? 'bg-slate-400' : (hoursDiff >= 24 ? 'bg-amber-500' : 'bg-green-500')}`}></div>
-                        </div>
-                        <div className="flex-1 min-w-0 text-left">
-                          <div className="flex justify-between items-baseline mb-0.5">
-                            <p className={`text-xs font-bold truncate flex items-center gap-1 ${isMe ? 'text-[#6750a4]' : 'text-slate-900'}`}>
-                                {isMe ? 'You' : userName}
-                            </p>
-                            <p className="text-[8px] text-slate-400 font-black uppercase tracking-tight whitespace-nowrap ml-2">{formatDistanceToNow(new Date(loc.updated), { addSuffix: true })}</p>
-                          </div>
-                          <p className="text-[11px] text-slate-500 truncate italic">
-                            {loc.note ? `"${loc.note}"` : (address || 'Active on map')}
-                          </p>
-                          {loc.note && address && (
-                             <p className="text-[9px] text-slate-400 truncate mt-0.5 flex items-center gap-1">
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /></svg>
-                                {address}
-                             </p>
-                          )}
-                        </div>
-                      </button>
-                  );
-                })}
-                {latestLocations.length === 0 && !loading && (
-                  <div className="py-12 text-center px-6 border-2 border-dashed border-slate-100 rounded-[32px] bg-slate-50/30">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.15em] leading-relaxed">Map is quiet</p>
-                  </div>
-                )}
-            </div>
-          </div>
+      {/* Sidebar / Bottom Sheet */}
+      <aside className="w-full md:w-[400px] bg-white border-t md:border-t-0 md:border-r border-slate-200 flex flex-col order-2 z-20 h-[50vh] md:h-full shadow-[0_-5px_20px_rgba(0,0,0,0.1)] md:shadow-none absolute bottom-0 md:relative rounded-t-[32px] md:rounded-none transition-all">
+        
+        {/* Handle for resizing on mobile (visual cue) */}
+        <div className="w-full h-6 flex items-center justify-center md:hidden shrink-0">
+             <div className="w-12 h-1.5 bg-slate-200 rounded-full mt-2"></div>
         </div>
 
-        <footer className="p-4 border-t border-slate-50 bg-white flex justify-between items-center text-[9px] font-black text-slate-300 uppercase tracking-widest">
-           <div className="flex gap-4">
-             <Link to="/guide" className="hover:text-[#6750a4] transition-colors">Help</Link>
-             <Link to="/privacy" className="hover:text-[#6750a4] transition-colors">Privacy</Link>
-           </div>
-           <span>Shared Community Map</span>
-        </footer>
+        <div className="p-5 md:p-6 space-y-6 flex-1 overflow-y-auto">
+          {/* Controls Area */}
+          <div className="bg-slate-50 p-5 rounded-[24px] border border-slate-100 shadow-sm">
+            <div className="flex justify-between items-center mb-4">
+                 <h2 className="text-sm font-bold text-slate-800">My Status</h2>
+                 <button onClick={() => setShowProfileEdit(!showProfileEdit)} className="text-[10px] font-bold text-[#6750a4] uppercase tracking-wider hover:underline focus:outline-none focus:text-indigo-800">
+                    {showProfileEdit ? 'Cancel' : 'Edit Name'}
+                 </button>
+            </div>
+
+            {showProfileEdit && (
+                <div className="mb-4 flex gap-2 animate-in fade-in">
+                    <label htmlFor="edit-name" className="sr-only">Edit Display Name</label>
+                    <input 
+                        id="edit-name"
+                        type="text" 
+                        value={newName} 
+                        onChange={(e) => setNewName(e.target.value)} 
+                        className="flex-1 px-4 py-3 text-sm border border-slate-300 rounded-xl bg-white text-slate-900 placeholder:text-slate-500 focus:ring-2 focus:ring-[#6750a4] focus:border-transparent outline-none shadow-sm" 
+                        placeholder="Name..." 
+                    />
+                    <button onClick={handleProfileUpdate} className="px-5 bg-[#6750a4] text-white rounded-xl text-xs font-bold shadow-md hover:bg-[#5a4491] transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#6750a4]">Save</button>
+                </div>
+            )}
+
+            <label htmlFor="status-note" className="sr-only">Status Note</label>
+            <input 
+                id="status-note"
+                type="text" 
+                value={note} 
+                onChange={(e) => setNote(e.target.value)} 
+                placeholder="What are you doing?" 
+                className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-500 mb-4 outline-none focus:ring-2 focus:ring-[#6750a4] focus:border-transparent transition-all shadow-sm" 
+            />
+            
+            <div className="grid grid-cols-2 gap-3 mb-5">
+                 {/* Expiry Selector */}
+                 <div className="relative">
+                    <label htmlFor="expiry-select" className="sr-only">Expiration Time</label>
+                    <select 
+                        id="expiry-select"
+                        value={expiryMinutes} 
+                        onChange={(e) => setExpiryMinutes(Number(e.target.value))} 
+                        className="w-full appearance-none bg-white border border-slate-300 text-slate-900 text-[11px] font-bold rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-[#6750a4] cursor-pointer shadow-sm"
+                    >
+                      {EXPIRY_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </select>
+                    {/* Custom Arrow */}
+                    <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none">
+                        <svg className="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </div>
+                 </div>
+                 
+                 {/* Privacy Segmented Control */}
+                 <div className="flex bg-slate-200 p-1 rounded-xl">
+                    <button 
+                        onClick={() => setIsPublic(true)}
+                        className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all py-2.5 ${isPublic ? 'bg-white text-[#6750a4] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        aria-pressed={isPublic}
+                        aria-label="Set visibility to Community"
+                    >
+                        {/* Updated Icon: Eye */}
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                        Community
+                    </button>
+                    <button 
+                        onClick={() => setIsPublic(false)}
+                        className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all py-2.5 ${!isPublic ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        aria-pressed={!isPublic}
+                        aria-label="Set visibility to Unlisted"
+                    >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                        Unlisted
+                    </button>
+                 </div>
+            </div>
+
+            <button onClick={handleUpdate} disabled={logging} className="w-full py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider text-white bg-[#6750a4] shadow-lg shadow-indigo-100 hover:bg-[#5a4491] active:scale-95 transition-all flex justify-center items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#6750a4]">
+              {logging ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    Updating...
+                  </>
+              ) : "Log Location"}
+            </button>
+            
+            {currentUserLoc && (
+                 <button onClick={handleDelete} className="w-full mt-3 py-2 text-[10px] font-bold uppercase tracking-widest text-rose-500 hover:bg-rose-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-rose-500">
+                    Stop Sharing
+                 </button>
+            )}
+          </div>
+
+          {/* Share Section */}
+          <div className="bg-indigo-50/50 rounded-[24px] border border-indigo-50 p-1">
+              <button 
+                onClick={() => {
+                  if (!publicToken) generatePublicLink();
+                  setShowShareOptions(!showShareOptions);
+                }} 
+                className="w-full flex items-center justify-between p-4 text-left group"
+                aria-expanded={showShareOptions}
+              >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 text-[#6750a4] flex items-center justify-center">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                    </div>
+                    <div>
+                        <span className="block text-xs font-bold text-slate-800">Share Unique Link</span>
+                        <span className="block text-[10px] text-slate-500">Visible to link holders even if unlisted</span>
+                    </div>
+                  </div>
+                  <svg className={`w-4 h-4 text-slate-400 transition-transform ${showShareOptions ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              
+              {showShareOptions && (
+                  <div className="px-4 pb-4 animate-in slide-in-from-top-1">
+                     <button 
+                        onClick={copyToClipboard} 
+                        className="w-full bg-white border border-indigo-200 rounded-xl p-3 flex items-center justify-between cursor-pointer hover:border-[#6750a4] transition-all group shadow-sm"
+                        title="Copy to clipboard"
+                     >
+                         <span className="text-xs font-mono text-slate-600 truncate mr-3 select-all">
+                            {publicToken ? `${window.location.origin}/#/share/${publicToken}` : 'Generating...'}
+                         </span>
+                         <span className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${copyFeedback ? 'text-emerald-600' : 'text-[#6750a4]'}`}>
+                             {copyFeedback ? (
+                                <>Copied <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg></>
+                             ) : (
+                                <>Copy <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg></>
+                             )}
+                         </span>
+                     </button>
+                  </div>
+              )}
+          </div>
+
+          {/* List */}
+          <div className="space-y-3 pb-8">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Nearby Activity</h3>
+            {latestLocations.length === 0 && !loading && (
+                <div className="text-center py-8 text-slate-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-slate-200">Map is quiet. Be the first to log!</div>
+            )}
+            {latestLocations.map(loc => {
+                const isMe = loc.user === user?.id;
+                if (loc.isPublic === false && !isMe) return null; // Client side filter for unlisted
+                
+                const userName = loc.expand?.user?.name || "User";
+                const isUnlisted = loc.isPublic === false;
+                
+                return (
+                    <button key={loc.id} onClick={() => focusMember(loc.user, loc.lat, loc.lng)} className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors text-left group border border-transparent hover:border-slate-100">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold shadow-sm ${isMe ? 'bg-[#6750a4]' : 'bg-slate-800'}`}>
+                           {loc.expand?.user?.avatar ? <img src={pb.files.getURL(loc.expand.user, loc.expand.user.avatar, {thumb:'100x100'})} className="w-full h-full object-cover rounded-xl"/> : userName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-center mb-0.5">
+                                <span className="text-xs font-bold text-slate-900 truncate flex items-center gap-1">
+                                    {isMe ? "You" : userName} 
+                                    {isUnlisted && <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-normal border border-slate-200">Hidden</span>}
+                                </span>
+                                <span className="text-[9px] text-slate-400 font-bold tabular-nums">{formatDistanceToNow(new Date(loc.updated))}</span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 truncate">{loc.note || loc.address || "Active on map"}</p>
+                        </div>
+                    </button>
+                )
+            })}
+          </div>
+        </div>
       </aside>
     </div>
   );

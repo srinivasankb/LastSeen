@@ -101,11 +101,11 @@ const ProfilePage: React.FC = () => {
                   type="text" 
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm focus:ring-2 focus:ring-[#6750a4] outline-none transition-all"
+                  className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-[#6750a4] outline-none transition-all shadow-sm"
                   placeholder="Enter your name"
                   aria-describedby="name-hint"
                 />
-                <p id="name-hint" className="text-[10px] text-slate-300 mt-2 px-1">This name is visible to your circle members on the map.</p>
+                <p id="name-hint" className="text-[10px] text-slate-400 mt-2 px-1">This name is visible to your circle members on the map.</p>
               </div>
 
               {error && (
@@ -126,7 +126,7 @@ const ProfilePage: React.FC = () => {
               <button 
                 type="submit"
                 disabled={loading}
-                className="w-full min-h-[60px] bg-[#6750a4] text-white rounded-full font-bold text-xs uppercase tracking-[0.2em] shadow-lg shadow-indigo-100 hover:bg-[#7e6bb4] transition-all disabled:opacity-50 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#6750a4]"
+                className="w-full min-h-[56px] bg-[#6750a4] text-white rounded-full font-bold text-xs uppercase tracking-[0.2em] shadow-lg shadow-indigo-100 hover:bg-[#7e6bb4] transition-all disabled:opacity-50 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#6750a4]"
               >
                 {loading ? 'Saving...' : 'Save Changes'}
               </button>
@@ -139,7 +139,7 @@ const ProfilePage: React.FC = () => {
             <p className="text-[11px] font-medium text-rose-400 mb-8 leading-relaxed">Closing your session will remove your authentication from this device. Your location history is never stored, but your account details remain active.</p>
             <button 
               onClick={handleLogout}
-              className="w-full min-h-[60px] bg-white text-rose-500 border-2 border-rose-100 rounded-full font-bold text-xs uppercase tracking-[0.2em] hover:bg-rose-100 transition-all active:scale-95 flex items-center justify-center gap-3 focus:outline-none focus:ring-2 focus:ring-rose-500"
+              className="w-full min-h-[56px] bg-white text-rose-500 border-2 border-rose-100 rounded-full font-bold text-xs uppercase tracking-[0.2em] hover:bg-rose-100 transition-all active:scale-95 flex items-center justify-center gap-3 focus:outline-none focus:ring-2 focus:ring-rose-500"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

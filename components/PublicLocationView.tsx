@@ -19,6 +19,7 @@ interface LocationLog {
 
 interface PublicUser {
   id: string;
+  collectionId: string;
   name: string;
   email: string;
   avatar: string;
@@ -57,6 +58,7 @@ const PublicLocationView: React.FC = () => {
         const userRec = users.items[0];
         setTargetUser({
             id: userRec.id,
+            collectionId: userRec.collectionId,
             name: userRec.name,
             email: userRec.email,
             avatar: userRec.avatar
@@ -121,7 +123,7 @@ const PublicLocationView: React.FC = () => {
               leafletMap.current = null;
           }
       };
-  }, [loading]); // Added loading dependency to ensure mapRef is available
+  }, [loading]);
 
   // Update Map Marker
   useEffect(() => {
@@ -210,16 +212,16 @@ const PublicLocationView: React.FC = () => {
             <div className="absolute bottom-8 left-0 right-0 px-4 flex justify-center z-[1000] pointer-events-none">
                 <div className="bg-white/95 backdrop-blur-md p-6 rounded-[32px] shadow-2xl border border-white/50 w-full max-w-sm pointer-events-auto">
                     <div className="flex items-center gap-4 mb-4">
-                        <div className="w-14 h-14 bg-[#6750a4]/10 rounded-[20px] flex items-center justify-center text-[#6750a4] font-bold text-xl overflow-hidden">
+                        <div className="w-14 h-14 bg-[#6750a4]/10 rounded-[20px] flex items-center justify-center text-[#6750a4] font-bold text-xl overflow-hidden shrink-0">
                              {targetUser.avatar ? (
                                  <img src={pb.files.getURL(targetUser, targetUser.avatar, { thumb: '100x100' })} className="w-full h-full object-cover" />
                              ) : (
                                  targetUser.name.charAt(0).toUpperCase()
                              )}
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Shared Location</p>
-                            <h2 className="text-lg font-bold text-slate-900">{targetUser.name || 'User'}</h2>
+                            <h2 className="text-lg font-bold text-slate-900 truncate">{targetUser.name || 'User'}</h2>
                         </div>
                     </div>
 

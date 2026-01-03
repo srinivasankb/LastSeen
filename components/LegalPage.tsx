@@ -26,23 +26,23 @@ const LegalPage: React.FC<LegalPageProps> = ({ title, type }) => {
         {type === 'privacy' && (
           <div className="space-y-6 text-[#1c1b1f]">
             <section>
-              <h2 className="text-2xl font-bold mb-4">Community Sharing Privacy</h2>
+              <h2 className="text-2xl font-bold mb-4">Location Privacy & Sharing</h2>
               <p className="text-slate-600 leading-relaxed">
-                Last Seen is a <strong>Community Map</strong> utility. When you broadcast your location, you are sharing it with all authenticated members of the application.
+                Last Seen allows you to control who sees your location. You can choose between <strong>Public</strong> visibility (all community members) or <strong>Private</strong> visibility (only you and those with your shared link).
               </p>
             </section>
 
             <section>
-              <h3 className="text-lg font-bold mb-2">How Data is Shared</h3>
+              <h3 className="text-lg font-bold mb-2">Public vs. Private</h3>
               <p className="text-slate-600 leading-relaxed">
-                Your location log (latitude, longitude, timestamp, and optional note) is stored in our database and displayed on the shared map to any user who is signed in via a verified account.
+                When you select <strong>Public</strong>, your location marker is visible to any authenticated user of the application. When you select <strong>Private</strong>, your marker is hidden from the general map and only visible to you. However, sharing your "Unique Link" allows anyone with that link to see your spot, regardless of this setting.
               </p>
             </section>
 
             <section>
               <h3 className="text-lg font-bold mb-2">No Passive Tracking</h3>
               <p className="text-slate-600 leading-relaxed">
-                We value your battery and your privacy. Last Seen <strong>does not</strong> track your movement in the background. Location data is only recorded and shared when you explicitly click the "Log My Spot" button.
+                We value your battery and your privacy. Last Seen <strong>does not</strong> track your movement in the background. Location data is only recorded and updated when you explicitly click the "Log My Spot" button.
               </p>
             </section>
           </div>
@@ -58,9 +58,9 @@ const LegalPage: React.FC<LegalPageProps> = ({ title, type }) => {
             </section>
 
             <section>
-              <h3 className="text-lg font-bold mb-2">Public Intent</h3>
+              <h3 className="text-lg font-bold mb-2">Community Intent</h3>
               <p className="text-slate-600 leading-relaxed">
-                You understand that this is a communal map. Do not use this service if you require private, one-to-one encrypted location sharing.
+                This app is designed for casual location sharing. Do not rely on it for critical safety or emergency situations.
               </p>
             </section>
 
@@ -74,7 +74,7 @@ const LegalPage: React.FC<LegalPageProps> = ({ title, type }) => {
             <section>
               <h3 className="text-lg font-bold mb-2">Safety Notice</h3>
               <p className="text-slate-600 leading-relaxed">
-                This app is not a replacement for emergency services or professional safety tracking. Use at your own discretion.
+                You are responsible for the links you share and the data you broadcast. Use the "Private" setting if you wish to limit your visibility on the map.
               </p>
             </section>
           </div>
@@ -85,7 +85,7 @@ const LegalPage: React.FC<LegalPageProps> = ({ title, type }) => {
             <section>
                 <h2 className="text-2xl font-bold mb-4">Welcome to Last Seen</h2>
                 <p className="text-slate-600 leading-relaxed">
-                    Last Seen is a simple, community-driven map that lets you broadcast your location to your trusted circle manually. This guide will help you get the most out of it.
+                    Last Seen is a simple map that lets you broadcast your location to your trusted circle manually. This guide will help you get the most out of it.
                 </p>
             </section>
 
@@ -99,8 +99,12 @@ const LegalPage: React.FC<LegalPageProps> = ({ title, type }) => {
                 </p>
                 <ul className="list-none space-y-3">
                     <li className="flex gap-3 items-start">
+                        <svg className="w-5 h-5 text-[#6750a4] mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                        <span className="text-slate-600 text-sm"><strong>Public vs Private:</strong> Select "Public" to be seen by all app users. Select "Private" to hide from the map (unless you share your unique link).</span>
+                    </li>
+                    <li className="flex gap-3 items-start">
                         <svg className="w-5 h-5 text-[#6750a4] mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        <span className="text-slate-600 text-sm"><strong>Add a Note:</strong> You can add a short status message (e.g., "At the library", "Safe at home").</span>
+                        <span className="text-slate-600 text-sm"><strong>Add a Note:</strong> You can add a short status message (e.g., "At the library").</span>
                     </li>
                     <li className="flex gap-3 items-start">
                         <svg className="w-5 h-5 text-[#6750a4] mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -115,10 +119,11 @@ const LegalPage: React.FC<LegalPageProps> = ({ title, type }) => {
                     Managing Your Privacy
                 </h3>
                 <p className="text-slate-600 leading-relaxed">
-                    Your location is visible to other authenticated users of the application while it is active.
+                    You have full control over your data.
                 </p>
-                <div className="mt-4 p-5 bg-slate-50 rounded-3xl border border-slate-100 text-sm leading-relaxed">
-                    <strong>Stop Sharing:</strong> If you want to remove your marker immediately, click the <span className="text-rose-500 font-bold uppercase text-xs tracking-wider border border-rose-200 bg-rose-50 px-2 py-0.5 rounded-lg mx-1">Stop Sharing</span> button below the log controls. This deletes your data from our server instantly.
+                <div className="mt-4 p-5 bg-slate-50 rounded-3xl border border-slate-100 text-sm leading-relaxed space-y-2">
+                    <p><strong>Stop Sharing:</strong> If you want to remove your marker immediately, click the <span className="text-rose-500 font-bold uppercase text-xs tracking-wider border border-rose-200 bg-rose-50 px-2 py-0.5 rounded-lg mx-1">Stop Sharing</span> button below the log controls.</p>
+                    <p><strong>Unique Link:</strong> In the dashboard, you can generate a unique URL. Sharing this link allows friends to see your location even if you set your marker to "Private".</p>
                 </div>
             </section>
 
@@ -127,13 +132,9 @@ const LegalPage: React.FC<LegalPageProps> = ({ title, type }) => {
                     <span className="w-8 h-8 rounded-full bg-[#6750a4] text-white flex items-center justify-center text-sm font-black shadow-md shadow-indigo-100">3</span>
                     Navigating the Map
                 </h3>
-                <p className="text-slate-600 leading-relaxed">
-                    The map shows clusters of people to keep the view clean.
-                </p>
                 <ul className="list-disc pl-5 space-y-2 text-slate-600 mt-4 text-sm">
                     <li><strong>Clusters:</strong> Click on a numbered circle to zoom in and see individual people in that area.</li>
-                    <li><strong>User Details:</strong> Click on any avatar on the map or in the sidebar list to see when they were last seen and read their status note.</li>
-                    <li><strong>Freshness:</strong> <span className="text-green-600 font-bold">Green dots</span> indicate updates within the last 24 hours. <span className="text-amber-500 font-bold">Amber dots</span> indicate older data.</li>
+                    <li><strong>Status:</strong> <span className="text-green-600 font-bold">Green dots</span> indicate recent updates. <span className="text-amber-500 font-bold">Amber dots</span> indicate older data.</li>
                 </ul>
             </section>
           </div>

@@ -32,11 +32,11 @@ const LandingPage: React.FC = () => {
       color: "bg-emerald-100 text-emerald-600"
     },
     {
-      title: "Manual Control",
-      description: "Last Seen only tracks you when you ask it to. There's no passive tracking in the background. You decide when to log your spot.",
+      title: "Control Privacy",
+      description: "Choose to share publicly with the community, or keep your spot private and share only via a unique link with close friends.",
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
         </svg>
       ),
       color: "bg-amber-100 text-amber-600"
@@ -74,10 +74,10 @@ const LandingPage: React.FC = () => {
             </div>
             <h1 className="text-5xl md:text-7xl font-bold text-slate-900 leading-[1.1]">
               Shared Safety. <br />
-              <span className="text-[#6750a4]">Zero Passive Tracking.</span>
+              <span className="text-[#6750a4]">Total Control.</span>
             </h1>
             <p className="text-xl text-slate-500 max-w-lg leading-relaxed">
-              Broadcast your location to the community map with a single click. Keep your circle informed of your last known whereabouts without background tracking.
+              Broadcast your location to the community map, or keep it private and share only with a select few. Zero background tracking.
             </p>
             <div className="flex flex-wrap gap-4">
               <button 

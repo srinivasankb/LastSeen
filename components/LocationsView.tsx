@@ -17,6 +17,7 @@ interface LocationLog {
   note?: string;
   address?: string; // Stored readable address
   user: string;
+  isPublic?: boolean; // New field
   expand?: {
     user: {
       id: string;
@@ -58,6 +59,7 @@ const LocationsView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [expiryMinutes, setExpiryMinutes] = useState<number>(0); // Default 0 = Never
+  const [isPublic, setIsPublic] = useState<boolean>(true); // Default to Public
   const [isStale, setIsStale] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [newName, setNewName] = useState(pb.authStore.record?.name || '');
@@ -129,8 +131,12 @@ const LocationsView: React.FC = () => {
       const myLoc = validRecords.find(r => r.user === myId);
       if (myLoc) {
         setCurrentUserLoc(myLoc);
-        // Only update note if field is empty to avoid interrupting user typing
+        // Only update these fields if we are NOT currently editing (simple check: if note is empty, assume sync)
         if (note === '') setNote(myLoc.note || '');
+        // Sync public state from DB if we aren't "in the middle" of a change (simplified here to always sync on load)
+        // Ideally we might want to check if the user has touched the control, but for now we sync.
+        setIsPublic(myLoc.isPublic !== false); // Default true if undefined
+        
         setIsStale(differenceInHours(new Date(), new Date(myLoc.updated)) >= 24);
       } else {
         setCurrentUserLoc(null);
@@ -255,8 +261,14 @@ const LocationsView: React.FC = () => {
       latestLocations.forEach(loc => {
         const userName = loc.expand?.user?.name || loc.expand?.user?.email?.split('@')[0] || "User";
         const isMe = loc.user === pb.authStore.record?.id;
+        const isPrivate = loc.isPublic === false;
         const avatarUrl = (loc.expand?.user?.id && loc.expand?.user?.avatar) ? pb.files.getURL(loc.expand.user, loc.expand.user.avatar, { thumb: '100x100' }) : null;
         const hoursDiff = differenceInHours(new Date(), new Date(loc.updated));
+
+        // Define status color
+        let statusColor = hoursDiff >= 24 ? 'bg-amber-500' : 'bg-green-500';
+        // If it's me and it's private, show a different indicator color or shape
+        if (isMe && isPrivate) statusColor = 'bg-slate-400';
 
         const icon = L.divIcon({
           className: 'custom-div-icon',
@@ -264,8 +276,13 @@ const LocationsView: React.FC = () => {
             <div class="relative group">
               <div class="w-12 h-12 ${isMe ? 'bg-[#6750a4]' : 'bg-slate-900'} rounded-2xl border-4 border-white shadow-xl flex items-center justify-center text-white text-xs font-bold overflow-hidden transition-all group-hover:scale-110 active:scale-90">
                 ${avatarUrl ? `<img src="${avatarUrl}" class="w-full h-full object-cover" />` : userName.charAt(0).toUpperCase()}
+                ${isMe && isPrivate ? `
+                  <div class="absolute inset-0 bg-black/40 flex items-center justify-center">
+                    <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                  </div>
+                ` : ''}
               </div>
-              <div class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${hoursDiff >= 24 ? 'bg-amber-500' : 'bg-green-500'}"></div>
+              <div class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${statusColor}"></div>
             </div>
           `,
           iconSize: [48, 48],
@@ -275,9 +292,13 @@ const LocationsView: React.FC = () => {
 
         const marker = L.marker([loc.lat, loc.lng], { icon }).bindPopup(`
           <div class="p-4 text-center min-w-[160px]">
-            <p class="font-bold text-sm mb-1 text-slate-900">${isMe ? 'My Location' : escapeHTML(userName)}</p>
+            <p class="font-bold text-sm mb-1 text-slate-900 flex items-center justify-center gap-1">
+               ${isMe ? 'My Location' : escapeHTML(userName)}
+               ${isPrivate ? '<svg class="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>' : ''}
+            </p>
             <p class="text-[9px] font-black uppercase tracking-widest text-[#6750a4] mb-3">${formatDistanceToNow(new Date(loc.updated), { addSuffix: true })}</p>
             ${loc.note ? `<p class="text-[11px] text-slate-500 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100 break-words">"${escapeHTML(loc.note)}"</p>` : ''}
+            ${isMe && isPrivate ? '<p class="text-[9px] text-slate-400 mt-2 font-medium">(Visible only to you & links)</p>' : ''}
           </div>
         `, { closeButton: false, className: 'custom-popup' });
         
@@ -354,7 +375,8 @@ const LocationsView: React.FC = () => {
             lng: pos.coords.longitude, 
             note: note.trim(),
             address: address, 
-            expiresAt: expiresAt 
+            expiresAt: expiresAt,
+            isPublic: isPublic // Send privacy setting
           };
 
           if (currentUserLoc) await pb.collection('locations').update(currentUserLoc.id, data);
@@ -426,7 +448,8 @@ const LocationsView: React.FC = () => {
               {isStale && <span className="text-[8px] bg-amber-500 text-white px-2 py-0.5 rounded-full uppercase tracking-widest font-black">Outdated</span>}
             </h2>
             <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="What are you up to?" className="w-full px-5 py-3.5 bg-white border border-slate-100 rounded-2xl text-sm mb-3 outline-none focus:ring-2 focus:ring-[#6750a4] transition-all" />
-            <div className="mb-4">
+            
+            <div className="mb-3">
               <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1.5 block">Auto-remove after</label>
               <div className="relative">
                 <select value={expiryMinutes} onChange={(e) => setExpiryMinutes(Number(e.target.value))} className="w-full appearance-none bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-2xl px-5 py-3 focus:outline-none focus:ring-2 focus:ring-[#6750a4] cursor-pointer">
@@ -435,6 +458,25 @@ const LocationsView: React.FC = () => {
                 <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-slate-400"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg></div>
               </div>
             </div>
+
+            {/* Visibility Toggle */}
+            <div className="mb-4 flex gap-2">
+              <button 
+                onClick={() => setIsPublic(true)}
+                className={`flex-1 py-2.5 rounded-xl border flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-widest transition-all ${isPublic ? 'bg-white border-[#6750a4] text-[#6750a4] shadow-sm' : 'bg-transparent border-transparent text-slate-400 hover:bg-black/5'}`}
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11.015a8 8 0 1015.928 8.169 17.026 17.026 0 00-3.4-9.282M3 11l.365-.797M21 21l-3.328-4.248M3 21l3.328-4.248M12 11a4 4 0 100 8 4 4 0 000-8z" /></svg>
+                Public
+              </button>
+              <button 
+                 onClick={() => setIsPublic(false)}
+                 className={`flex-1 py-2.5 rounded-xl border flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-widest transition-all ${!isPublic ? 'bg-white border-slate-300 text-slate-600 shadow-sm' : 'bg-transparent border-transparent text-slate-400 hover:bg-black/5'}`}
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                Private
+              </button>
+            </div>
+
             <button onClick={handleUpdate} disabled={logging} className={`w-full min-h-[52px] rounded-full font-bold text-xs uppercase tracking-widest text-white flex items-center justify-center gap-3 transition-all shadow-lg active:scale-95 ${isStale ? 'bg-amber-500 shadow-amber-100' : 'bg-[#6750a4] shadow-indigo-100'}`}>
               {logging ? <div className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full"></div> : "Log My Spot"}
             </button>
@@ -445,14 +487,14 @@ const LocationsView: React.FC = () => {
           <div className="px-1">
              <button onClick={() => setShowShareOptions(!showShareOptions)} className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-[#6750a4] transition-colors mb-2">
                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
-                 Share Live Location
+                 Unique Link Sharing
              </button>
              
              {showShareOptions && (
                  <div className="p-5 bg-indigo-50/50 rounded-[28px] border border-indigo-100 animate-in slide-in-from-top-2">
                     {publicToken ? (
                         <>
-                           <p className="text-[10px] text-slate-500 font-medium mb-3 leading-relaxed">Anyone with this link can view your last active location without signing in.</p>
+                           <p className="text-[10px] text-slate-500 font-medium mb-3 leading-relaxed">Anyone with this link can view your last active location, even if your spot is marked as "Private".</p>
                            <div className="flex gap-2 mb-3">
                                <input readOnly value={`${window.location.origin}/#/share/${publicToken}`} className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10px] text-slate-500 font-mono outline-none" />
                                <button onClick={copyToClipboard} className="bg-white border border-slate-200 text-[#6750a4] rounded-xl px-3 py-2 hover:bg-indigo-50 transition-colors">
@@ -482,6 +524,10 @@ const LocationsView: React.FC = () => {
             <div className="space-y-2">
                 {latestLocations.map(loc => {
                   const isMe = loc.user === user?.id;
+                  const isPrivate = loc.isPublic === false;
+                  // If it's private and not mine, don't show in list (double safety, though backend should filter)
+                  if (isPrivate && !isMe) return null;
+
                   const userName = loc.expand?.user?.name || loc.expand?.user?.email?.split('@')[0] || "User";
                   const hoursDiff = differenceInHours(new Date(), new Date(loc.updated));
                   const address = loc.address;
@@ -501,14 +547,21 @@ const LocationsView: React.FC = () => {
                             <path className="text-slate-200" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="2.5" />
                             {percentRemaining > 0 && <path className={`${percentRemaining < 20 ? 'text-rose-400' : 'text-[#6750a4]'} transition-all duration-1000 ease-out`} strokeDasharray={`${percentRemaining}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />}
                           </svg>
-                          <div className={`w-10 h-10 rounded-[14px] flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm z-10 ${isMe ? 'bg-[#6750a4]' : 'bg-slate-900'}`}>
+                          <div className={`w-10 h-10 rounded-[14px] flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm z-10 ${isMe ? 'bg-[#6750a4]' : 'bg-slate-900'} relative overflow-hidden`}>
                             {loc.expand?.user?.avatar ? <img src={pb.files.getURL(loc.expand.user, loc.expand.user.avatar, { thumb: '100x100' })} className="w-full h-full object-cover rounded-[14px]" /> : userName.charAt(0).toUpperCase()}
+                            {isMe && isPrivate && (
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                    <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                                </div>
+                            )}
                           </div>
-                          <div className={`absolute bottom-1 right-1 z-20 w-3 h-3 rounded-full border-2 border-white ${hoursDiff >= 24 ? 'bg-amber-500' : 'bg-green-500'}`}></div>
+                          <div className={`absolute bottom-1 right-1 z-20 w-3 h-3 rounded-full border-2 border-white ${isMe && isPrivate ? 'bg-slate-400' : (hoursDiff >= 24 ? 'bg-amber-500' : 'bg-green-500')}`}></div>
                         </div>
                         <div className="flex-1 min-w-0 text-left">
                           <div className="flex justify-between items-baseline mb-0.5">
-                            <p className={`text-xs font-bold truncate ${isMe ? 'text-[#6750a4]' : 'text-slate-900'}`}>{isMe ? 'You' : userName}</p>
+                            <p className={`text-xs font-bold truncate flex items-center gap-1 ${isMe ? 'text-[#6750a4]' : 'text-slate-900'}`}>
+                                {isMe ? 'You' : userName}
+                            </p>
                             <p className="text-[8px] text-slate-400 font-black uppercase tracking-tight whitespace-nowrap ml-2">{formatDistanceToNow(new Date(loc.updated), { addSuffix: true })}</p>
                           </div>
                           <p className="text-[11px] text-slate-500 truncate italic">

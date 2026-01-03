@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { pb } from '../lib/pocketbase';
@@ -150,6 +151,7 @@ const ProfilePage: React.FC = () => {
       </main>
 
       <footer className="py-12 px-6 flex flex-wrap justify-center gap-x-8 gap-y-4 border-t border-black/5 bg-white">
+        <Link to="/guide" className="text-[10px] uppercase font-black text-slate-300 hover:text-[#6750a4] transition-colors tracking-widest p-2">User Guide</Link>
         <Link to="/privacy" className="text-[10px] uppercase font-black text-slate-300 hover:text-[#6750a4] transition-colors tracking-widest p-2">Privacy Policy</Link>
         <Link to="/terms" className="text-[10px] uppercase font-black text-slate-300 hover:text-[#6750a4] transition-colors tracking-widest p-2">Terms of Service</Link>
       </footer>

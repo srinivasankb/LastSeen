@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { pb, isAuthenticated } from './lib/pocketbase';
@@ -50,6 +51,7 @@ const App: React.FC = () => {
           <Route path="/" element={<MainView />} />
           <Route path="/privacy" element={<LegalPage title="Privacy Policy" type="privacy" />} />
           <Route path="/terms" element={<LegalPage title="Terms & Conditions" type="terms" />} />
+          <Route path="/guide" element={<LegalPage title="User Guide" type="guide" />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </div>

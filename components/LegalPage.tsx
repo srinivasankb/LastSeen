@@ -24,26 +24,93 @@ const LegalPage: React.FC<LegalPageProps> = ({ title, type }) => {
 
       <main className="flex-1 max-w-2xl mx-auto w-full p-8 md:p-12 prose prose-slate">
         {type === 'privacy' && (
-          <div className="space-y-6 text-[#1c1b1f]">
+          <div className="space-y-8 text-[#1c1b1f]">
             <section>
-              <h2 className="text-2xl font-bold mb-4">Location Privacy & Sharing</h2>
+              <h2 className="text-2xl font-bold mb-4">Privacy Policy</h2>
               <p className="text-slate-600 leading-relaxed">
-                Last Seen allows you to control who sees your location. You can choose between <strong>Public</strong> visibility (all community members) or <strong>Private</strong> visibility (only you and those with your shared link).
+                This Privacy Policy explains how <strong>Last Seen</strong> ("we", "our", or "us") collects, uses, shares, and protects your information. By using our application, you agree to the collection and use of information in accordance with this policy.
               </p>
             </section>
 
-            <section>
-              <h3 className="text-lg font-bold mb-2">Public vs. Private</h3>
-              <p className="text-slate-600 leading-relaxed">
-                When you select <strong>Public</strong>, your location marker is visible to any authenticated user of the application. When you select <strong>Private</strong>, your marker is hidden from the general map and only visible to you. However, sharing your "Unique Link" allows anyone with that link to see your spot, regardless of this setting.
-              </p>
-            </section>
+            <div className="bg-slate-50 p-6 sm:p-8 rounded-[32px] border border-slate-100 space-y-8">
+                <div>
+                    <h3 className="text-sm font-black text-[#6750a4] uppercase tracking-widest mb-6">Google User Data Policy</h3>
+                    
+                    <div className="space-y-8">
+                        <section>
+                            <h4 className="font-bold text-slate-900 mb-2 text-base">1. Data Accessed</h4>
+                            <p className="text-slate-600 text-sm leading-relaxed">
+                                When you utilize Google Sign-In, Last Seen requests access to the following Google user data:
+                            </p>
+                            <ul className="list-disc pl-5 mt-2 space-y-1 text-slate-600 text-sm marker:text-[#6750a4]">
+                                <li><strong>Google ID:</strong> A unique identifier to manage your account.</li>
+                                <li><strong>Name:</strong> Displayed to identify you to your circle.</li>
+                                <li><strong>Email Address:</strong> Used for unique account identification, authentication, and communication.</li>
+                                <li><strong>Profile Picture (Avatar):</strong> Used as a visual identifier on your map markers.</li>
+                            </ul>
+                        </section>
+
+                        <section>
+                            <h4 className="font-bold text-slate-900 mb-2 text-base">2. Data Usage</h4>
+                            <p className="text-slate-600 text-sm leading-relaxed">
+                                The information collected is used solely for providing the core functionality of the Last Seen application:
+                            </p>
+                            <ul className="list-disc pl-5 mt-2 space-y-1 text-slate-600 text-sm marker:text-[#6750a4]">
+                                <li><strong>Authentication:</strong> Verifying your identity to secure your account.</li>
+                                <li><strong>Map Functionality:</strong> Displaying your profile (Name and Avatar) on the map so community members can recognize your location status.</li>
+                                <li><strong>User Experience:</strong> Managing your session and application preferences.</li>
+                            </ul>
+                        </section>
+
+                        <section>
+                            <h4 className="font-bold text-slate-900 mb-2 text-base">3. Data Sharing</h4>
+                            <p className="text-slate-600 text-sm leading-relaxed mb-3">
+                                <strong>User-Controlled Sharing:</strong> Your data (Name, Avatar, Location) is shared with other users strictly based on your visibility settings:
+                            </p>
+                            <ul className="list-disc pl-5 mb-3 space-y-1 text-slate-600 text-sm marker:text-[#6750a4]">
+                                <li><em>Community:</em> Visible to all authenticated users of the app.</li>
+                                <li><em>Unlisted:</em> Visible only to you and those with whom you share your unique link.</li>
+                            </ul>
+                            <p className="text-slate-600 text-sm leading-relaxed">
+                                <strong>Third Parties:</strong> We <span className="font-bold">do not</span> sell, trade, or transfer your Google user data to outside parties, advertisers, or data brokers. Data is only shared with our cloud infrastructure providers for the purpose of hosting the service.
+                            </p>
+                        </section>
+
+                        <section>
+                            <h4 className="font-bold text-slate-900 mb-2 text-base">4. Data Storage & Protection</h4>
+                            <p className="text-slate-600 text-sm leading-relaxed">
+                                Your personal information is stored in a secured database. We employ industry-standard security measures, including SSL/TLS encryption for all data transmission, to protect your personal information from unauthorized access, alteration, disclosure, or destruction.
+                            </p>
+                        </section>
+
+                        <section>
+                            <h4 className="font-bold text-slate-900 mb-2 text-base">5. Data Retention & Deletion</h4>
+                            <p className="text-slate-600 text-sm leading-relaxed mb-2">
+                                <strong>Location Logs:</strong> Ephemeral by nature. Logs are automatically deleted from our systems after the expiration period you select (e.g., 24 hours), or immediately upon your request via the "Stop Sharing" feature.
+                            </p>
+                            <p className="text-slate-600 text-sm leading-relaxed">
+                                <strong>Account Deletion:</strong> You have the right to request the complete deletion of your account and all associated data. To do so, please contact us at <a href="mailto:hi@srinikb.in" className="text-[#6750a4] font-bold hover:underline">hi@srinikb.in</a>. Upon request, we will permanently remove all your Google user data from our servers.
+                            </p>
+                        </section>
+                    </div>
+                </div>
+            </div>
 
             <section>
-              <h3 className="text-lg font-bold mb-2">No Passive Tracking</h3>
-              <p className="text-slate-600 leading-relaxed">
-                We value your battery and your privacy. Last Seen <strong>does not</strong> track your movement in the background. Location data is only recorded and updated when you explicitly click the "Log My Spot" button.
+              <h3 className="text-lg font-bold mb-3">Additional Privacy Controls</h3>
+              <p className="text-slate-600 leading-relaxed mb-4">
+                Beyond Google data, Last Seen respects your location privacy:
               </p>
+              <ul className="space-y-2">
+                <li className="flex gap-3 text-sm text-slate-600">
+                    <svg className="w-5 h-5 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    <span><strong>No Background Tracking:</strong> Location is only accessed when you manually trigger an update.</span>
+                </li>
+                <li className="flex gap-3 text-sm text-slate-600">
+                    <svg className="w-5 h-5 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    <span><strong>Granular Control:</strong> You can delete your location marker instantly at any time.</span>
+                </li>
+              </ul>
             </section>
           </div>
         )}

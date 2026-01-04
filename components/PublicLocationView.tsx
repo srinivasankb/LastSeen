@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { pb } from '../lib/pocketbase';
@@ -18,6 +17,7 @@ const PublicLocationView: React.FC = () => {
   const leafletMap = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+  const initialized = useRef(false);
 
   const { theme, toggleTheme } = useTheme();
 
@@ -42,7 +42,13 @@ const PublicLocationView: React.FC = () => {
              }
         } catch (e) { setTargetLocation(null); }
 
-    } catch (err) { setError("Unavailable."); } finally { setLoading(false); }
+    } catch (err: any) { 
+        // Only set global error for non-network/non-abort errors to avoid flickering "Something went wrong"
+        const isTransient = err.status === 0 || err.isAbort;
+        if (!isTransient) {
+            setError("Unavailable."); 
+        }
+    } finally { setLoading(false); }
   };
 
   useEffect(() => {
@@ -61,23 +67,50 @@ const PublicLocationView: React.FC = () => {
           }).setView([20, 0], 2);
           L.control.zoom({ position: 'bottomright' }).addTo(leafletMap.current);
       }
-      return () => { if (leafletMap.current) { leafletMap.current.remove(); leafletMap.current = null; } };
+      return () => { 
+        if (leafletMap.current) { 
+            // 1. Stop animations
+            leafletMap.current.stop();
+
+            // 2. Clear all layers
+            try {
+              leafletMap.current.eachLayer((layer: any) => {
+                 try { leafletMap.current.removeLayer(layer); } catch(e) {}
+              });
+            } catch(e) {}
+
+            // 3. Remove map
+            try {
+              leafletMap.current.off();
+              leafletMap.current.remove(); 
+            } catch(e) {}
+            
+            leafletMap.current = null; 
+            initialized.current = false; 
+            tileLayerRef.current = null;
+            markerRef.current = null;
+        } 
+      };
   }, [loading]);
 
   useEffect(() => {
     if (leafletMap.current) {
-        if (tileLayerRef.current) tileLayerRef.current.remove();
+        if (tileLayerRef.current) {
+             try { tileLayerRef.current.remove(); } catch(e) {}
+        }
+        
         const tileUrl = theme === 'dark' 
             ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
             : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+        
         tileLayerRef.current = L.tileLayer(tileUrl, { maxZoom: 20 }).addTo(leafletMap.current);
     }
   }, [theme, loading]);
 
   useEffect(() => {
-      if (!leafletMap.current || !targetLocation) return;
-      if (markerRef.current) markerRef.current.remove();
-
+      // Check for map container existence
+      if (!leafletMap.current || !leafletMap.current.getContainer() || !targetLocation) return;
+      
       const isVague = targetLocation.isVague === true;
 
       const icon = L.divIcon({
@@ -87,9 +120,21 @@ const PublicLocationView: React.FC = () => {
         iconAnchor: [32, 64]
       });
 
-      markerRef.current = L.marker([targetLocation.lat, targetLocation.lng], { icon }).addTo(leafletMap.current);
-      leafletMap.current.flyTo([targetLocation.lat, targetLocation.lng], 15, { duration: 1.5 });
-  }, [targetLocation]);
+      if (markerRef.current) {
+          // Update existing marker
+          markerRef.current.setLatLng([targetLocation.lat, targetLocation.lng]);
+          markerRef.current.setIcon(icon);
+      } else {
+          // Create new marker
+          markerRef.current = L.marker([targetLocation.lat, targetLocation.lng], { icon }).addTo(leafletMap.current);
+      }
+
+      // Only fly to bounds on first load or valid location update if not initialized
+      if (!initialized.current) {
+          leafletMap.current.flyTo([targetLocation.lat, targetLocation.lng], 15, { duration: 1.5 });
+          initialized.current = true;
+      }
+  }, [targetLocation, targetUser]);
 
   if (loading) return <div className="h-screen flex items-center justify-center bg-white dark:bg-slate-900"><div className="w-8 h-8 border-4 border-[#6750a4]/30 border-t-[#6750a4] rounded-full animate-spin"></div></div>;
 

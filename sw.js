@@ -1,4 +1,3 @@
-
 const CACHE_NAME = 'last-seen-v3';
 const urlsToCache = [
   './',
@@ -20,7 +19,11 @@ self.addEventListener('fetch', event => {
         if (response) {
           return response;
         }
-        return fetch(event.request);
+        // Safely catch network errors to prevent "Uncaught (in promise) TypeError" in console
+        return fetch(event.request).catch(() => {
+             // Return a simple 404 or null to satisfy the promise chain cleanly
+             return new Response(null, { status: 404, statusText: "Offline/Network Error" });
+        });
       })
   );
 });

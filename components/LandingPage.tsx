@@ -100,11 +100,12 @@ const LandingPage: React.FC = () => {
 
       {/* Hero Section */}
       <section className="pt-40 pb-20 px-6 relative overflow-hidden">
+        {/* Background Gradients */}
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-purple-100/50 dark:bg-purple-900/20 rounded-full blur-3xl -z-10 translate-x-1/2 -translate-y-1/4"></div>
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-indigo-50/50 dark:bg-indigo-900/20 rounded-full blur-3xl -z-10 -translate-x-1/3 translate-y-1/4"></div>
 
         <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
-          <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-700 fade-in">
+          <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-700 fade-in order-2 lg:order-1">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-[11px] font-bold uppercase tracking-widest shadow-sm">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               Community Tracking
@@ -128,30 +129,58 @@ const LandingPage: React.FC = () => {
               </a>
             </div>
           </div>
-          <div className="relative animate-in slide-in-from-right-8 duration-1000 fade-in delay-200 hidden lg:block">
-            <div className="relative z-10 bg-white dark:bg-slate-800 p-3 rounded-[40px] shadow-2xl shadow-indigo-200/50 dark:shadow-black/50 border border-slate-100 dark:border-slate-700 rotate-2 transform transition-transform hover:rotate-0 duration-700 cursor-pointer">
-              <div className="aspect-[4/3] bg-slate-100 dark:bg-slate-900 rounded-[32px] overflow-hidden relative group">
-                <img 
-                  src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&q=80&w=1200" 
-                  alt="Map Interface Preview" 
-                  className="w-full h-full object-cover opacity-90 dark:opacity-60 group-hover:scale-105 transition-transform duration-1000"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-                
-                {/* Floating UI Elements Simulation */}
-                <div className="absolute bottom-6 left-6 right-6 flex gap-3">
-                   <div className="h-12 w-12 bg-white dark:bg-slate-800 rounded-xl shadow-lg flex items-center justify-center text-[#6750a4] dark:text-indigo-400">
-                      <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 100-12 6 6 0 000 12z"/></svg>
-                   </div>
-                   <div className="h-12 flex-1 bg-white dark:bg-slate-800 rounded-xl shadow-lg flex items-center px-4 text-xs font-bold text-slate-600 dark:text-slate-200">
-                      Logging location...
-                   </div>
-                </div>
-              </div>
+          
+          {/* Abstract Map Illustration */}
+          <div className="relative animate-in slide-in-from-right-8 duration-1000 fade-in delay-200 order-1 lg:order-2 flex justify-center lg:justify-end">
+            <div className="relative w-full max-w-[500px] aspect-square">
+               {/* Abstract Grid Map */}
+               <div className="absolute inset-0 bg-slate-50 dark:bg-slate-800/50 rounded-[40px] border border-slate-100 dark:border-slate-700 overflow-hidden shadow-2xl shadow-indigo-100/40 dark:shadow-black/40 rotate-3 transition-transform hover:rotate-0 duration-500">
+                    {/* Grid Lines */}
+                    <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]" 
+                         style={{ backgroundImage: 'linear-gradient(#6750a4 1px, transparent 1px), linear-gradient(90deg, #6750a4 1px, transparent 1px)', backgroundSize: '40px 40px' }}>
+                    </div>
+                    
+                    {/* Map Elements (CSS Only) */}
+                    <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-indigo-100 dark:bg-indigo-900/30 rounded-full blur-2xl"></div>
+                    <div className="absolute bottom-1/3 right-1/4 w-40 h-40 bg-purple-100 dark:bg-purple-900/30 rounded-full blur-2xl"></div>
+
+                    {/* Connection Lines */}
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                        <line x1="30%" y1="40%" x2="60%" y2="60%" stroke="#6750a4" strokeWidth="2" strokeDasharray="4 4" className="opacity-20 animate-pulse" />
+                        <line x1="60%" y1="60%" x2="70%" y2="30%" stroke="#6750a4" strokeWidth="2" strokeDasharray="4 4" className="opacity-20 animate-pulse" style={{ animationDelay: '0.5s' }} />
+                    </svg>
+
+                    {/* Markers */}
+                    {/* Me Marker */}
+                    <div className="absolute top-[40%] left-[30%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-2">
+                        <div className="relative">
+                            <div className="w-12 h-12 bg-[#6750a4] rounded-xl flex items-center justify-center text-white shadow-lg z-10 relative">
+                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                            </div>
+                            <div className="absolute inset-0 bg-[#6750a4] rounded-xl animate-ping opacity-20"></div>
+                        </div>
+                        <div className="px-3 py-1 bg-white dark:bg-slate-700 rounded-lg shadow-sm text-[10px] font-bold text-slate-600 dark:text-slate-200">You</div>
+                    </div>
+
+                    {/* Friend 1 */}
+                    <div className="absolute top-[60%] left-[60%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-2">
+                         <div className="w-10 h-10 bg-slate-800 dark:bg-slate-600 rounded-xl flex items-center justify-center text-white shadow-lg border-2 border-white dark:border-slate-700">
+                            <span className="text-xs font-bold">A</span>
+                         </div>
+                    </div>
+
+                    {/* Friend 2 (Vague) */}
+                    <div className="absolute top-[30%] left-[70%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-2">
+                         <div className="relative">
+                            <div className="w-10 h-10 bg-slate-800 dark:bg-slate-600 rounded-xl flex items-center justify-center text-white shadow-lg border-2 border-white dark:border-slate-700 z-10 relative">
+                                <span className="text-xs font-bold">B</span>
+                                <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#6750a4] rounded-full border border-white"></div>
+                            </div>
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 border border-dashed border-[#6750a4]/30 rounded-full animate-[spin_10s_linear_infinite]"></div>
+                         </div>
+                    </div>
+               </div>
             </div>
-            {/* Decor Elements */}
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#eaddff] dark:bg-indigo-900/30 rounded-full opacity-50 blur-2xl"></div>
-            <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-indigo-100 dark:bg-purple-900/30 rounded-full opacity-50 blur-2xl"></div>
           </div>
         </div>
       </section>
@@ -165,8 +194,8 @@ const LandingPage: React.FC = () => {
             </div>
             <div className="grid md:grid-cols-3 gap-12">
                 {steps.map((step, idx) => (
-                    <div key={idx} className="relative">
-                        <div className="text-6xl font-black text-slate-100 dark:text-slate-800 absolute -top-10 -left-4 -z-10">{step.num}</div>
+                    <div key={idx} className="relative group">
+                        <div className="text-6xl font-black text-slate-100 dark:text-slate-800 absolute -top-10 -left-4 -z-10 transition-colors group-hover:text-indigo-50 dark:group-hover:text-slate-700">{step.num}</div>
                         <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">{step.title}</h3>
                         <p className="text-slate-500 dark:text-slate-400 leading-relaxed font-medium">{step.desc}</p>
                     </div>

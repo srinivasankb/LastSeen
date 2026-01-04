@@ -29,6 +29,7 @@ A privacy-focused, manual location sharing application. Broadcast your last know
 2.  **Users Collection**:
     *   Add a text field named `public_token` (used for sharing unique links).
     *   Enable **Google OAuth2** in the Auth Providers settings.
+    *   **Index**: Add `CREATE UNIQUE INDEX idx_public_token ON users (public_token)`
 3.  **Locations Collection**:
     *   Create a new collection named `locations`.
     *   Add the following fields:
@@ -45,6 +46,8 @@ A privacy-focused, manual location sharing application. Broadcast your last know
         *   Create: `user = @request.auth.id`
         *   Update: `user = @request.auth.id`
         *   Delete: `user = @request.auth.id`
+    *   **Indexes** (Critical for speed):
+        *   `CREATE INDEX idx_user_updated ON locations (user, updated)`
 
 ### 2. Configuration
 

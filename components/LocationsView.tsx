@@ -1,5 +1,4 @@
-
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { pb } from '../lib/pocketbase';
 import { differenceInHours, formatDistanceToNow, addMinutes, isPast } from 'date-fns';
 import { useTheme } from '../lib/theme';
@@ -99,19 +98,38 @@ export default function LocationsView() {
     });
   }, [latestLocations, searchQuery]);
 
-  const fetchData = async () => {
+  // Separate effect to ensure we have the public token without causing loops in fetchData
+  useEffect(() => {
+    const fetchToken = async () => {
+        if (user && !publicToken) {
+            try {
+                const freshUser = await pb.collection('users').getOne(user.id, { requestKey: null });
+                if (freshUser.public_token) {
+                    setPublicToken(freshUser.public_token);
+                }
+            } catch (e) {
+                // Silent fail
+            }
+        }
+    };
+    fetchToken();
+  }, [user?.id]); // Only run if user ID changes (login/logout)
+
+  const fetchData = useCallback(async () => {
     try {
       const myId = pb.authStore.record?.id;
 
-      const result = await pb.collection('locations').getList<LocationLog>(1, 50, {
+      // Fetch all locations sorted by update time
+      const result = await pb.collection('locations').getList<LocationLog>(1, 100, {
         sort: '-updated',
         expand: 'user',
-        requestKey: null,
+        requestKey: null, // Disable auto-cancellation to ensure completion
       });
       
       let records = result.items;
       let myLoc = records.find(r => r.user === myId);
 
+      // If my location isn't in the top 100, try to fetch it specifically
       if (myId && !myLoc) {
         try {
             const myRecordsList = await pb.collection('locations').getList<LocationLog>(1, 1, {
@@ -124,48 +142,61 @@ export default function LocationsView() {
                 records = [...records, myLoc]; 
             }
         } catch (e) {
-            console.error("Could not fetch my record", e);
+            // Ignore sub-fetch error
         }
       }
 
+      // Cleanup expired records logic (User side)
       if (myId) {
-        const freshUser = await pb.collection('users').getOne(myId);
-        setPublicToken(freshUser.public_token || null);
-        
         const myExpiredRecords = records.filter(r => 
           r.user === myId && r.expiresAt && isPast(new Date(r.expiresAt))
         );
+        
+        // Asynchronously delete expired records without blocking UI
         if (myExpiredRecords.length > 0) {
-          Promise.all(myExpiredRecords.map(r => 
-            pb.collection('locations').delete(r.id).catch(err => console.error(err))
-          ));
+          myExpiredRecords.forEach(r => pb.collection('locations').delete(r.id).catch(() => {}));
         }
       }
 
+      // Filter out expired for display
       const validRecords = records.filter(r => {
         if (myId && r.user === myId && r.expiresAt && isPast(new Date(r.expiresAt))) return false;
         return true;
       });
 
-      setAllLocations(validRecords);
+      // Update lists
+      setAllLocations(prev => {
+          return validRecords;
+      });
       
       if (myLoc) {
-        setCurrentUserLoc(myLoc);
-        if (note === '') setNote(myLoc.note || '');
-        setIsPublic(myLoc.isPublic !== false); 
-        setIsVague(myLoc.isVague || false);
+        // Prevent infinite loop: Only update state if data actually changed
+        const hasChanged = !currentUserLoc || 
+                           currentUserLoc.updated !== myLoc.updated || 
+                           currentUserLoc.id !== myLoc.id;
+
+        if (hasChanged) {
+            // Only update local inputs if we switched context or init
+            if (!currentUserLoc) {
+                setNote(myLoc.note || '');
+                setIsPublic(myLoc.isPublic !== false); 
+                setIsVague(myLoc.isVague || false);
+            }
+            setCurrentUserLoc(myLoc);
+        }
       } else {
-        setCurrentUserLoc(null);
+        if (currentUserLoc) setCurrentUserLoc(null);
       }
-      setError(null);
     } catch (err: any) {
-      if (err.name !== 'ClientResponseError' || !err.isAbort) {
-        console.error('Fetch error:', err);
+      // Suppress standard abort/cancellation errors and offline/network errors (status 0)
+      const isIgnorable = err.name === 'AbortError' || err.isAbort || err.status === 0;
+      if (!isIgnorable) {
+        console.warn('Background fetch warning:', err.message);
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUserLoc]);
 
   const handleProfileUpdate = async () => {
     if (!user) return;
@@ -173,6 +204,7 @@ export default function LocationsView() {
       const updated = await pb.collection('users').update(user.id, { name: newName });
       pb.authStore.save(pb.authStore.token, updated);
       setShowProfileEdit(false);
+      // Explicitly trigger a refresh since user details changed
       fetchData();
     } catch (err) {
       setError("Profile update failed.");
@@ -201,11 +233,19 @@ export default function LocationsView() {
       setTimeout(() => setCopyFeedback(false), 2000);
   };
 
+  // Initial Fetch and Realtime Subscription
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
-  }, []);
+
+    // Subscribe to changes in the 'locations' collection
+    pb.collection('locations').subscribe('*', function (e) {
+        fetchData();
+    });
+
+    return () => {
+        pb.collection('locations').unsubscribe('*');
+    };
+  }, [fetchData]);
 
   // Map Initialization
   useEffect(() => {
@@ -238,10 +278,42 @@ export default function LocationsView() {
         leafletMap.current.addLayer(clusterLayer.current);
       }
     }
+    
+    // Improved cleanup to prevent "reading '_zoom' of undefined" error
     return () => {
         if (leafletMap.current) {
-            leafletMap.current.remove();
+            // 1. Stop any flyTo/panTo animations immediately
+            leafletMap.current.stop();
+
+            // 2. Safely remove cluster layer
+            if (clusterLayer.current) {
+                try {
+                    clusterLayer.current.clearLayers();
+                    if (leafletMap.current.hasLayer(clusterLayer.current)) {
+                        leafletMap.current.removeLayer(clusterLayer.current);
+                    }
+                } catch(e) {}
+                clusterLayer.current = null;
+            }
+
+            // 3. Remove all other layers
+            try {
+              leafletMap.current.eachLayer((layer: any) => {
+                 try { leafletMap.current.removeLayer(layer); } catch(e) {}
+              });
+            } catch(e) {}
+            
+            // 4. Finally destroy map
+            try {
+                leafletMap.current.off();
+                leafletMap.current.remove();
+            } catch(e) {
+                // Ignore cleanup errors
+            }
+            
             leafletMap.current = null;
+            tileLayerRef.current = null;
+            markerRefs.current = {};
         }
     };
   }, []);
@@ -249,7 +321,9 @@ export default function LocationsView() {
   // Update Tile Layer when theme changes
   useEffect(() => {
     if (leafletMap.current) {
-        if (tileLayerRef.current) tileLayerRef.current.remove();
+        if (tileLayerRef.current) {
+             try { tileLayerRef.current.remove(); } catch(e) {}
+        }
         
         const tileUrl = theme === 'dark' 
             ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
@@ -261,8 +335,15 @@ export default function LocationsView() {
 
   // Marker Rendering
   useEffect(() => {
-    if (clusterLayer.current && leafletMap.current && typeof L !== 'undefined') {
-      clusterLayer.current.clearLayers();
+    // Safety check: verify map exists and is still attached to DOM container
+    // getContainer() is standard Leaflet API to check if map is initialized
+    if (clusterLayer.current && leafletMap.current && leafletMap.current.getContainer() && typeof L !== 'undefined') {
+      try {
+        clusterLayer.current.clearLayers();
+      } catch(e) {
+        return; // Map likely destroyed
+      }
+      
       markerRefs.current = {};
       const bounds = L.latLngBounds([]);
       
@@ -422,6 +503,7 @@ export default function LocationsView() {
 
           if (currentUserLoc) await pb.collection('locations').update(currentUserLoc.id, data);
           else await pb.collection('locations').create(data);
+          // Fetch isn't strictly necessary as subscription handles it, but ensures local state triggers fast
           await fetchData();
         } catch (err) { setError("Broadcast failed."); }
         finally { setLogging(false); }
@@ -450,7 +532,7 @@ export default function LocationsView() {
         setCurrentUserLoc(null);
         setNote('');
         setAllLocations(prev => prev.filter(l => l.id !== currentUserLoc.id));
-        await fetchData();
+        // Realtime will clean up the rest
     } catch (err) { setError("Failed to delete."); } 
     finally { setLogging(false); }
   };
@@ -691,7 +773,7 @@ export default function LocationsView() {
                                     {isVagueList ? (
                                         <svg className="w-3 h-3 text-[#6750a4] dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 12c2-3 5-3 8 0s6 3 8 0" /></svg>
                                     ) : (
-                                        <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                        <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                     )}
                                     {loc.address || "Location logged"}
                                 </p>

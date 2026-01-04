@@ -21,7 +21,7 @@ const AuthCard: React.FC = () => {
   };
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-[32px] shadow-2xl shadow-indigo-200/50 dark:shadow-black/40 overflow-hidden border border-slate-100 dark:border-slate-700 p-8 transition-all text-center w-full">
+    <div className="bg-white dark:bg-slate-800 rounded-[32px] shadow-xl shadow-slate-200/50 dark:shadow-none overflow-hidden border border-slate-200 dark:border-slate-700 p-8 transition-all text-center w-full">
       
       {/* Header */}
       <div className="mb-8">
@@ -48,7 +48,7 @@ const AuthCard: React.FC = () => {
         type="button"
         onClick={() => handleOAuth('google')}
         disabled={loading}
-        className="w-full h-14 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-white border-2 border-slate-100 dark:border-slate-600 hover:border-slate-200 dark:hover:border-slate-500 font-bold rounded-xl transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50 group relative overflow-hidden shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#6750a4]"
+        className="w-full h-14 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-white border-2 border-slate-100 dark:border-slate-600 hover:border-slate-200 dark:hover:border-slate-500 font-bold rounded-xl transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50 group relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#6750a4]"
         aria-label="Continue with Google"
       >
         <div className="absolute inset-0 bg-slate-50 dark:bg-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>

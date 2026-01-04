@@ -5,12 +5,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#ffffff">
-    <meta name="description" content="Share your latest location with your trusted circle.">
-    <title>Last Seen - Location Tracker</title>
     
-    <!-- PWA Manifest -->
+    <!-- Primary Meta Tags -->
+    <title>Last Seen - Privacy-First Location Sharing</title>
+    <meta name="title" content="Last Seen - Privacy-First Location Sharing">
+    <meta name="description" content="Log and share your last known location with your trusted circle without background tracking. Free, open-source, and privacy-focused.">
+    <meta name="keywords" content="location sharing, privacy, open source, map, coordinates, safety, check-in">
+    <meta name="author" content="Srinivasan KB">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://lastseen.srinikb.in/">
+    <meta property="og:title" content="Last Seen - Privacy-First Location Sharing">
+    <meta property="og:description" content="Log and share your last known location with your trusted circle without background tracking. Free, open-source, and privacy-focused.">
+    <meta property="og:image" content="https://lastseen.srinikb.in/assets/og.png">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://lastseen.srinikb.in/">
+    <meta property="twitter:title" content="Last Seen - Privacy-First Location Sharing">
+    <meta property="twitter:description" content="Log and share your last known location with your trusted circle without background tracking. Free, open-source, and privacy-focused.">
+    <meta property="twitter:image" content="https://lastseen.srinikb.in/assets/og.png">
+    
+    <!-- Favicon & PWA Manifest -->
+    <link rel="icon" type="image/png" href="./assets/icon.png">
+    <link rel="apple-touch-icon" href="./assets/icon.png">
     <link rel="manifest" href="./manifest.json">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/149/149060.png">
 
     <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <script>
@@ -24,6 +44,9 @@
                 900: '#0f172a',
                 950: '#020617',
               }
+            },
+            animation: {
+              'spin-slow': 'spin 8s linear infinite',
             }
           }
         }

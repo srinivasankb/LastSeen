@@ -4,7 +4,7 @@
   "name": "Last Seen Location",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/149/149060.png",
+      "src": "./assets/icon.png",
       "type": "image/png",
       "sizes": "512x512"
     }

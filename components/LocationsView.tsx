@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { pb } from '../lib/pocketbase';
 import { differenceInHours, formatDistanceToNow, addMinutes, isPast } from 'date-fns';
-import { Link } from 'react-router-dom';
+import { useTheme } from '../lib/theme';
 
 declare const L: any;
 
@@ -17,6 +17,7 @@ interface LocationLog {
   address?: string;
   user: string;
   isPublic?: boolean; 
+  isVague?: boolean;
   expand?: {
     user: {
       id: string;
@@ -53,7 +54,7 @@ export default function LocationsView() {
   const [note, setNote] = useState('');
   const [expiryMinutes, setExpiryMinutes] = useState<number>(0); 
   const [isPublic, setIsPublic] = useState<boolean>(true); 
-  const [isStale, setIsStale] = useState(false);
+  const [isVague, setIsVague] = useState<boolean>(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [newName, setNewName] = useState(pb.authStore.record?.name || '');
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,10 +66,12 @@ export default function LocationsView() {
   
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<any>(null);
+  const tileLayerRef = useRef<any>(null);
   const clusterLayer = useRef<any>(null);
   const markerRefs = useRef<Record<string, any>>({});
   const hasFitBounds = useRef(false);
 
+  const { theme } = useTheme();
   const user = pb.authStore.record;
 
   const latestLocations = useMemo(() => {
@@ -100,7 +103,6 @@ export default function LocationsView() {
     try {
       const myId = pb.authStore.record?.id;
 
-      // Scalability: Only fetch latest 50 records to save bandwidth/API
       const result = await pb.collection('locations').getList<LocationLog>(1, 50, {
         sort: '-updated',
         expand: 'user',
@@ -110,7 +112,6 @@ export default function LocationsView() {
       let records = result.items;
       let myLoc = records.find(r => r.user === myId);
 
-      // If current user is not in the top 50, fetch them specifically so they can update their status
       if (myId && !myLoc) {
         try {
             const myRecordsList = await pb.collection('locations').getList<LocationLog>(1, 1, {
@@ -131,7 +132,6 @@ export default function LocationsView() {
         const freshUser = await pb.collection('users').getOne(myId);
         setPublicToken(freshUser.public_token || null);
         
-        // Background Cleanup for owned expired records
         const myExpiredRecords = records.filter(r => 
           r.user === myId && r.expiresAt && isPast(new Date(r.expiresAt))
         );
@@ -142,7 +142,6 @@ export default function LocationsView() {
         }
       }
 
-      // Filter out expired records for display state
       const validRecords = records.filter(r => {
         if (myId && r.user === myId && r.expiresAt && isPast(new Date(r.expiresAt))) return false;
         return true;
@@ -154,10 +153,9 @@ export default function LocationsView() {
         setCurrentUserLoc(myLoc);
         if (note === '') setNote(myLoc.note || '');
         setIsPublic(myLoc.isPublic !== false); 
-        setIsStale(differenceInHours(new Date(), new Date(myLoc.updated)) >= 24);
+        setIsVague(myLoc.isVague || false);
       } else {
         setCurrentUserLoc(null);
-        setIsStale(false);
       }
       setError(null);
     } catch (err: any) {
@@ -215,10 +213,10 @@ export default function LocationsView() {
       leafletMap.current = L.map(mapRef.current, { 
         zoomControl: false, 
         attributionControl: false,
-        worldCopyJump: true
+        worldCopyJump: true,
+        maxZoom: 20
       }).setView([20, 0], 2);
       
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 20 }).addTo(leafletMap.current);
       L.control.zoom({ position: 'topright' }).addTo(leafletMap.current); 
 
       if (L.markerClusterGroup) {
@@ -248,6 +246,19 @@ export default function LocationsView() {
     };
   }, []);
 
+  // Update Tile Layer when theme changes
+  useEffect(() => {
+    if (leafletMap.current) {
+        if (tileLayerRef.current) tileLayerRef.current.remove();
+        
+        const tileUrl = theme === 'dark' 
+            ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+            : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+        
+        tileLayerRef.current = L.tileLayer(tileUrl, { maxZoom: 20 }).addTo(leafletMap.current);
+    }
+  }, [theme]);
+
   // Marker Rendering
   useEffect(() => {
     if (clusterLayer.current && leafletMap.current && typeof L !== 'undefined') {
@@ -259,6 +270,7 @@ export default function LocationsView() {
         const userName = loc.expand?.user?.name || loc.expand?.user?.email?.split('@')[0] || "User";
         const isMe = loc.user === pb.authStore.record?.id;
         const isPrivate = loc.isPublic === false;
+        const isVagueLoc = loc.isVague === true;
         
         // Skip rendering other users if they are private
         if (isPrivate && !isMe) return;
@@ -273,7 +285,7 @@ export default function LocationsView() {
           className: 'custom-div-icon',
           html: `
             <div class="relative group">
-              <div class="w-10 h-10 md:w-12 md:h-12 ${isMe ? 'bg-[#6750a4]' : 'bg-slate-900'} rounded-xl border-[3px] border-white shadow-lg flex items-center justify-center text-white text-[10px] md:text-xs font-bold overflow-hidden transition-all group-hover:scale-110">
+              <div class="w-10 h-10 md:w-12 md:h-12 ${isMe ? 'bg-[#6750a4]' : 'bg-slate-900 dark:bg-slate-700'} rounded-xl border-[3px] border-white dark:border-slate-800 shadow-lg flex items-center justify-center text-white text-[10px] md:text-xs font-bold overflow-hidden transition-all group-hover:scale-110">
                 ${avatarUrl ? `<img src="${avatarUrl}" class="w-full h-full object-cover" />` : userName.charAt(0).toUpperCase()}
                 ${isMe && isPrivate ? `
                   <div class="absolute inset-0 bg-black/50 flex items-center justify-center">
@@ -281,7 +293,13 @@ export default function LocationsView() {
                   </div>
                 ` : ''}
               </div>
-              <div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${statusColor}"></div>
+              <div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-slate-800 ${statusColor}"></div>
+              ${isVagueLoc ? `
+                 <div class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#6750a4] border-2 border-white dark:border-slate-800 flex items-center justify-center z-10 shadow-sm" title="Approximate Location">
+                    <svg class="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M4 12c2-3 5-3 8 0s6 3 8 0" /></svg>
+                 </div>
+                 <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 border-2 border-dashed border-[#6750a4]/30 rounded-full pointer-events-none animate-spin-slow" style="animation-duration: 10s"></div>
+              ` : ''}
             </div>
           `,
           iconSize: [40, 40],
@@ -291,13 +309,14 @@ export default function LocationsView() {
 
         const marker = L.marker([loc.lat, loc.lng], { icon }).bindPopup(`
           <div class="p-3 text-center min-w-[140px]">
-            <p class="font-bold text-sm mb-1 text-slate-900 flex items-center justify-center gap-1">
+            <p class="font-bold text-sm mb-1 text-slate-900 dark:text-white flex items-center justify-center gap-1">
                ${isMe ? 'My Location' : escapeHTML(userName)}
-               ${isPrivate ? '<span class="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-normal border border-slate-200">Hidden</span>' : ''}
+               ${isPrivate ? '<span class="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded font-normal border border-slate-200 dark:border-slate-600">Hidden</span>' : ''}
             </p>
-            <p class="text-[10px] text-[#6750a4] mb-2 font-medium">${formatDistanceToNow(new Date(loc.updated), { addSuffix: true })}</p>
-            ${loc.note ? `<p class="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 break-words mb-2">"${escapeHTML(loc.note)}"</p>` : ''}
-            ${loc.address ? `<p class="text-[10px] text-slate-500 flex items-center justify-center gap-1"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>${escapeHTML(loc.address)}</p>` : ''}
+            ${isVagueLoc ? '<div class="mb-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800">Approximate</div>' : ''}
+            <p class="text-[10px] text-[#6750a4] dark:text-indigo-400 mb-2 font-medium">${formatDistanceToNow(new Date(loc.updated), { addSuffix: true })}</p>
+            ${loc.note ? `<p class="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700 break-words mb-2">"${escapeHTML(loc.note)}"</p>` : ''}
+            ${loc.address ? `<p class="text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>${escapeHTML(loc.address)}</p>` : ''}
           </div>
         `, { closeButton: false, className: 'custom-popup' });
         
@@ -311,7 +330,7 @@ export default function LocationsView() {
         hasFitBounds.current = true;
       }
     }
-  }, [filteredLocations]);
+  }, [filteredLocations]); // Re-run when list changes. Theme change handled by tile layer effect.
 
   const resetView = () => {
     if (latestLocations.length > 0 && leafletMap.current) {
@@ -331,18 +350,15 @@ export default function LocationsView() {
 
   const getReadableAddress = async (lat: number, lng: number): Promise<string> => {
     try {
-      // Zoom 14 gives neighborhood/suburb/village level details which is better for "properly shown" addresses
       const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14&accept-language=en`);
       if (!res.ok) return "";
       const data = await res.json();
       const addr = data.address;
       
-      // Construct a more meaningful address
       const locality = addr.suburb || addr.neighbourhood || addr.village || addr.town || addr.city || "";
       const region = addr.county || addr.state || addr.country || "";
       
       if (locality && region) {
-          // Avoid duplication if city and county are same
           if (locality === region) return locality;
           return `${locality}, ${region}`;
       }
@@ -361,15 +377,40 @@ export default function LocationsView() {
           let expiresAt = "";
           if (expiryMinutes > 0) expiresAt = addMinutes(now, expiryMinutes).toISOString();
 
-          const address = await getReadableAddress(pos.coords.latitude, pos.coords.longitude);
+          let lat = pos.coords.latitude;
+          let lng = pos.coords.longitude;
+          let addressBase = await getReadableAddress(lat, lng);
+          
+          if (isVague) {
+              // Add ~300m to 700m offset randomization
+              const radiusInDegrees = 0.006; // roughly 600-700m
+              const angle = Math.random() * 2 * Math.PI;
+              // offset between 0.3 and 1.0 of the radius to ensure it doesn't land exactly on the spot
+              const dist = (0.3 + (Math.random() * 0.7)) * radiusInDegrees;
+              
+              const latOffset = dist * Math.cos(angle);
+              // Adjust longitude offset for latitude to maintain roughly circular distribution
+              const lngOffset = (dist * Math.sin(angle)) / Math.cos(lat * (Math.PI / 180));
+              
+              lat += latOffset;
+              lng += lngOffset;
+              
+              // Obfuscate address
+              if (addressBase) {
+                  const parts = addressBase.split(',');
+                  addressBase = `Near ${parts[0]}`;
+              }
+          }
+
           const data = { 
             user: user?.id, 
-            lat: pos.coords.latitude, 
-            lng: pos.coords.longitude, 
+            lat: lat, 
+            lng: lng, 
             note: note.trim(),
-            address: address, 
+            address: addressBase, 
             expiresAt: expiresAt,
-            isPublic: isPublic 
+            isPublic: isPublic,
+            isVague: isVague
           };
 
           if (currentUserLoc) await pb.collection('locations').update(currentUserLoc.id, data);
@@ -397,21 +438,21 @@ export default function LocationsView() {
   };
 
   return (
-    <div className="h-full flex flex-col md:flex-row bg-white overflow-hidden relative">
-      {/* Sidebar - Relative on mobile to prevent map obstruction */}
-      <aside className="w-full md:w-[420px] lg:w-[480px] bg-white border-t md:border-t-0 md:border-r border-slate-200 flex flex-col order-2 md:order-1 z-20 h-[45vh] md:h-full shadow-[0_-5px_20px_rgba(0,0,0,0.1)] md:shadow-none relative">
+    <div className="h-full flex flex-col md:flex-row bg-white dark:bg-slate-900 overflow-hidden relative">
+      {/* Sidebar */}
+      <aside className="w-full md:w-[420px] lg:w-[480px] bg-white dark:bg-slate-900 border-t md:border-t-0 md:border-r border-slate-200 dark:border-slate-800 flex flex-col order-2 md:order-1 z-20 h-[45vh] md:h-full shadow-[0_-5px_20px_rgba(0,0,0,0.1)] md:shadow-none relative">
         
-        {/* Handle for resizing on mobile (visual cue) */}
+        {/* Handle for resizing on mobile */}
         <div className="w-full h-6 flex items-center justify-center md:hidden shrink-0 cursor-grab active:cursor-grabbing">
-             <div className="w-12 h-1.5 bg-slate-200 rounded-full mt-2"></div>
+             <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full mt-2"></div>
         </div>
 
         <div className="p-5 md:p-8 space-y-6 flex-1 overflow-y-auto">
           {/* Controls Area */}
-          <div className="bg-slate-50 p-6 rounded-[24px] border border-slate-100 shadow-sm">
+          <div className="bg-slate-50 dark:bg-slate-850 p-6 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm">
             <div className="flex justify-between items-center mb-4">
-                 <h2 className="text-sm font-bold text-slate-800">My Status</h2>
-                 <button onClick={() => setShowProfileEdit(!showProfileEdit)} className="text-[10px] font-bold text-[#6750a4] uppercase tracking-wider hover:underline focus:outline-none focus:text-indigo-800">
+                 <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200">My Status</h2>
+                 <button onClick={() => setShowProfileEdit(!showProfileEdit)} className="text-[10px] font-bold text-[#6750a4] dark:text-indigo-400 uppercase tracking-wider hover:underline focus:outline-none focus:text-indigo-800">
                     {showProfileEdit ? 'Cancel' : 'Edit Name'}
                  </button>
             </div>
@@ -424,7 +465,7 @@ export default function LocationsView() {
                         type="text" 
                         value={newName} 
                         onChange={(e) => setNewName(e.target.value)} 
-                        className="flex-1 px-4 py-3 text-sm border border-slate-300 rounded-xl bg-white text-slate-900 placeholder:text-slate-500 focus:ring-2 focus:ring-[#6750a4] focus:border-transparent outline-none shadow-sm" 
+                        className="flex-1 px-4 py-3 text-sm border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-500 focus:ring-2 focus:ring-[#6750a4] focus:border-transparent outline-none shadow-sm" 
                         placeholder="Name..." 
                     />
                     <button onClick={handleProfileUpdate} className="px-5 bg-[#6750a4] text-white rounded-xl text-xs font-bold shadow-md hover:bg-[#5a4491] transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#6750a4]">Save</button>
@@ -438,10 +479,10 @@ export default function LocationsView() {
                 value={note} 
                 onChange={(e) => setNote(e.target.value)} 
                 placeholder="What are you doing?" 
-                className="w-full px-5 py-4 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-500 mb-5 outline-none focus:ring-2 focus:ring-[#6750a4] focus:border-transparent transition-all shadow-sm" 
+                className="w-full px-5 py-4 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder:text-slate-500 mb-5 outline-none focus:ring-2 focus:ring-[#6750a4] focus:border-transparent transition-all shadow-sm" 
             />
             
-            <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="grid grid-cols-2 gap-4 mb-4">
                  {/* Expiry Selector */}
                  <div className="relative">
                     <label htmlFor="expiry-select" className="sr-only">Expiration Time</label>
@@ -449,7 +490,7 @@ export default function LocationsView() {
                         id="expiry-select"
                         value={expiryMinutes} 
                         onChange={(e) => setExpiryMinutes(Number(e.target.value))} 
-                        className="w-full appearance-none bg-white border border-slate-300 text-slate-900 text-[11px] font-bold rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#6750a4] cursor-pointer shadow-sm"
+                        className="w-full appearance-none bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-[11px] font-bold rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#6750a4] cursor-pointer shadow-sm"
                     >
                       {EXPIRY_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                     </select>
@@ -460,19 +501,19 @@ export default function LocationsView() {
                  </div>
                  
                  {/* Privacy Segmented Control */}
-                 <div className="flex bg-slate-200 p-1 rounded-xl">
+                 <div className="flex bg-slate-200 dark:bg-slate-800 p-1 rounded-xl">
                     <button 
                         onClick={() => setIsPublic(true)}
-                        className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all py-2.5 ${isPublic ? 'bg-white text-[#6750a4] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all py-2.5 ${isPublic ? 'bg-white dark:bg-slate-600 text-[#6750a4] dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
                         aria-pressed={isPublic}
                         aria-label="Set visibility to Community"
                     >
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                        Community
+                        Public
                     </button>
                     <button 
                         onClick={() => setIsPublic(false)}
-                        className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all py-2.5 ${!isPublic ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all py-2.5 ${!isPublic ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
                         aria-pressed={!isPublic}
                         aria-label="Set visibility to Unlisted"
                     >
@@ -482,7 +523,32 @@ export default function LocationsView() {
                  </div>
             </div>
 
-            <button onClick={handleUpdate} disabled={logging} className="w-full py-4 rounded-xl font-bold text-sm uppercase tracking-wider text-white bg-[#6750a4] shadow-lg shadow-indigo-100 hover:bg-[#5a4491] active:scale-95 transition-all flex justify-center items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#6750a4]">
+            {/* Vague Mode Toggle */}
+            <div className="mb-6 flex items-center justify-between px-2">
+                 <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                         <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Vague Mode</span>
+                         <div className="group relative">
+                             <svg className="w-3.5 h-3.5 text-slate-400 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 text-center">
+                                 Adds random noise (~500m) to your location so you aren't pinpointed exactly.
+                             </div>
+                         </div>
+                    </div>
+                    <span className="text-[10px] text-slate-500">Approx. 500m radius accuracy</span>
+                 </div>
+                 <button 
+                    onClick={() => setIsVague(!isVague)}
+                    className={`w-11 h-6 rounded-full transition-colors relative focus:outline-none focus:ring-2 focus:ring-[#6750a4] focus:ring-offset-1 ${isVague ? 'bg-[#6750a4]' : 'bg-slate-300 dark:bg-slate-700'}`}
+                    role="switch"
+                    aria-checked={isVague}
+                    aria-label="Toggle Vague Mode"
+                 >
+                    <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform shadow-sm ${isVague ? 'left-6' : 'left-1'}`}></div>
+                 </button>
+            </div>
+
+            <button onClick={handleUpdate} disabled={logging} className="w-full py-4 rounded-xl font-bold text-sm uppercase tracking-wider text-white bg-[#6750a4] shadow-lg shadow-indigo-100 dark:shadow-none hover:bg-[#5a4491] active:scale-95 transition-all flex justify-center items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#6750a4]">
               {logging ? (
                   <>
                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -492,14 +558,14 @@ export default function LocationsView() {
             </button>
             
             {currentUserLoc && (
-                 <button onClick={handleDelete} className="w-full mt-3 py-2 text-[10px] font-bold uppercase tracking-widest text-rose-500 hover:bg-rose-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-rose-500">
+                 <button onClick={handleDelete} className="w-full mt-3 py-2 text-[10px] font-bold uppercase tracking-widest text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-rose-500">
                     Stop Sharing
                  </button>
             )}
           </div>
 
           {/* Share Section */}
-          <div className="bg-indigo-50/50 rounded-[24px] border border-indigo-50 p-1">
+          <div className="bg-indigo-50/50 dark:bg-indigo-900/20 rounded-[24px] border border-indigo-50 dark:border-indigo-900/30 p-1">
               <button 
                 onClick={() => {
                   if (!publicToken) generatePublicLink();
@@ -509,12 +575,12 @@ export default function LocationsView() {
                 aria-expanded={showShareOptions}
               >
                   <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-full bg-indigo-100 text-[#6750a4] flex items-center justify-center">
+                    <div className="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-800 text-[#6750a4] dark:text-indigo-200 flex items-center justify-center">
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
                     </div>
                     <div>
-                        <span className="block text-sm font-bold text-slate-800">Share Unique Link</span>
-                        <span className="block text-[11px] text-slate-500">Visible to link holders even if unlisted</span>
+                        <span className="block text-sm font-bold text-slate-800 dark:text-slate-200">Share Unique Link</span>
+                        <span className="block text-[11px] text-slate-500 dark:text-slate-400">Visible to link holders even if unlisted</span>
                     </div>
                   </div>
                   <svg className={`w-4 h-4 text-slate-400 transition-transform ${showShareOptions ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
@@ -524,13 +590,13 @@ export default function LocationsView() {
                   <div className="px-4 pb-4 animate-in slide-in-from-top-1">
                      <button 
                         onClick={copyToClipboard} 
-                        className="w-full bg-white border border-indigo-200 rounded-xl p-3 flex items-center justify-between cursor-pointer hover:border-[#6750a4] transition-all group shadow-sm"
+                        className="w-full bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 rounded-xl p-3 flex items-center justify-between cursor-pointer hover:border-[#6750a4] transition-all group shadow-sm"
                         title="Copy to clipboard"
                      >
-                         <span className="text-xs font-mono text-slate-600 truncate mr-3 select-all">
+                         <span className="text-xs font-mono text-slate-600 dark:text-slate-400 truncate mr-3 select-all">
                             {publicToken ? `${window.location.origin}/#/share/${publicToken}` : 'Generating...'}
                          </span>
-                         <span className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${copyFeedback ? 'text-emerald-600' : 'text-[#6750a4]'}`}>
+                         <span className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${copyFeedback ? 'text-emerald-600' : 'text-[#6750a4] dark:text-indigo-400'}`}>
                              {copyFeedback ? (
                                 <>Copied <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg></>
                              ) : (
@@ -550,7 +616,7 @@ export default function LocationsView() {
              <input 
                 type="text" 
                 placeholder="Search name or place..." 
-                className="w-full pl-11 pr-4 py-3 bg-slate-50 border-none rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-[#6750a4] outline-none transition-shadow"
+                className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-850 border-none rounded-xl text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-[#6750a4] outline-none transition-shadow"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
              />
@@ -562,7 +628,7 @@ export default function LocationsView() {
                 Nearby Activity {searchQuery && `(${filteredLocations.length})`}
             </h3>
             {filteredLocations.length === 0 && !loading && (
-                <div className="text-center py-10 text-slate-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                <div className="text-center py-10 text-slate-400 text-xs italic bg-slate-50/50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
                     {searchQuery ? "No matches found." : "Map is quiet. Be the first to log!"}
                 </div>
             )}
@@ -572,26 +638,36 @@ export default function LocationsView() {
                 
                 const userName = loc.expand?.user?.name || "User";
                 const isUnlisted = loc.isPublic === false;
+                const isVagueList = loc.isVague === true;
                 
                 return (
-                    <button key={loc.id} onClick={() => focusMember(loc.user, loc.lat, loc.lng)} className="w-full flex items-center gap-4 p-3 rounded-2xl hover:bg-slate-50 transition-colors text-left group border border-transparent hover:border-slate-100">
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-sm shrink-0 ${isMe ? 'bg-[#6750a4]' : 'bg-slate-800'}`}>
+                    <button key={loc.id} onClick={() => focusMember(loc.user, loc.lat, loc.lng)} className="w-full flex items-center gap-4 p-3 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left group border border-transparent hover:border-slate-100 dark:hover:border-slate-700">
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-sm shrink-0 relative ${isMe ? 'bg-[#6750a4]' : 'bg-slate-800 dark:bg-slate-700'}`}>
                            {loc.expand?.user?.avatar ? <img src={pb.files.getURL(loc.expand.user, loc.expand.user.avatar, {thumb:'100x100'})} className="w-full h-full object-cover rounded-xl"/> : userName.charAt(0).toUpperCase()}
+                           {isVagueList && (
+                             <div className="absolute -top-1 -right-1 w-4 h-4 bg-[#6750a4] rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center" title="Approximate Location">
+                                <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 12c2-3 5-3 8 0s6 3 8 0" /></svg>
+                             </div>
+                           )}
                         </div>
                         <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-center mb-1">
-                                <span className="text-sm font-bold text-slate-900 truncate flex items-center gap-1.5">
+                                <span className="text-sm font-bold text-slate-900 dark:text-white truncate flex items-center gap-1.5">
                                     {isMe ? "You" : userName} 
-                                    {isUnlisted && <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold border border-slate-200 uppercase tracking-wider">Hidden</span>}
+                                    {isUnlisted && <span className="text-[9px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-1.5 py-0.5 rounded font-bold border border-slate-200 dark:border-slate-600 uppercase tracking-wider">Hidden</span>}
                                 </span>
                                 <span className="text-[10px] text-slate-400 font-bold tabular-nums">{formatDistanceToNow(new Date(loc.updated))}</span>
                             </div>
                             <div className="flex flex-col gap-0.5">
                                 {loc.note && (
-                                    <p className="text-xs text-slate-900 font-medium truncate">"{loc.note}"</p>
+                                    <p className="text-xs text-slate-900 dark:text-slate-200 font-medium truncate">"{loc.note}"</p>
                                 )}
-                                <p className="text-[11px] text-slate-500 truncate flex items-center gap-1">
-                                    <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
+                                    {isVagueList ? (
+                                        <svg className="w-3 h-3 text-[#6750a4] dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 12c2-3 5-3 8 0s6 3 8 0" /></svg>
+                                    ) : (
+                                        <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                    )}
                                     {loc.address || "Location logged"}
                                 </p>
                             </div>
@@ -604,11 +680,11 @@ export default function LocationsView() {
       </aside>
 
       {/* Map Section */}
-      <div className="flex-1 relative order-1 md:order-2 h-full w-full min-h-0 bg-slate-50">
+      <div className="flex-1 relative order-1 md:order-2 h-full w-full min-h-0 bg-slate-50 dark:bg-slate-900">
         <div ref={mapRef} className="w-full h-full" />
         {/* Reset Button - Moved to bottom right */}
         <div className="absolute bottom-8 right-4 z-[1000] flex flex-col gap-2">
-            <button onClick={resetView} aria-label="Reset Map View" className="bg-white p-3 rounded-full shadow-lg text-slate-600 hover:text-[#6750a4] active:scale-95 transition-all focus:outline-none focus:ring-2 focus:ring-[#6750a4]">
+            <button onClick={resetView} aria-label="Reset Map View" className="bg-white dark:bg-slate-800 p-3 rounded-full shadow-lg text-slate-600 dark:text-slate-200 hover:text-[#6750a4] dark:hover:text-indigo-400 active:scale-95 transition-all focus:outline-none focus:ring-2 focus:ring-[#6750a4]">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
             </button>
         </div>

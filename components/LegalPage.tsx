@@ -44,7 +44,7 @@ const LegalPage: React.FC<LegalPageProps> = ({ title, type }) => {
                             </p>
                             <ul className="list-disc pl-5 mt-2 space-y-1 text-slate-600 dark:text-slate-400 text-sm marker:text-[#6750a4]">
                                 <li><strong>Google ID:</strong> A unique identifier to manage your account.</li>
-                                <li><strong>Name:</strong> Displayed to identify you to your circle.</li>
+                                <li><strong>Name:</strong> Displayed to identify you to others.</li>
                                 <li><strong>Email Address:</strong> Used for unique account identification, authentication, and communication.</li>
                                 <li><strong>Profile Picture (Avatar):</strong> Used as a visual identifier on your map markers.</li>
                             </ul>

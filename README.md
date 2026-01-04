@@ -1,20 +1,84 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
 
-# Run and deploy your AI Studio app
+# Last Seen
 
-This contains everything you need to run your app locally.
+A privacy-focused, manual location sharing application. Broadcast your last known spot to your friends or the community without constant background tracking.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1nbFSeOUC8_VTGhDd4CTZmdrhTZ3CfeHD
+## Features
 
-## Run Locally
+*   **📍 Manual Logging**: You control when your location is updated. No background battery drain or creeping.
+*   **🌊 Vague Mode**: Share your general area (~500m radius) without revealing your exact coordinates.
+*   **🔒 Privacy Controls**: Choose between Public visibility (community map) or Unlisted (share via unique link).
+*   **⏲️ Auto-Expiration**: Set your location to expire automatically (1h, 4h, 24h, etc.).
+*   **🗺️ Interactive Map**: Powered by Leaflet with clustering for viewing community activity.
+*   **🌓 Dark Mode**: Fully supported UI theme switching.
+*   **📱 PWA Ready**: Installable on mobile devices.
 
-**Prerequisites:**  Node.js
+## Tech Stack
 
+*   **Frontend**: React 19 (ES Modules), TypeScript.
+*   **Styling**: TailwindCSS (via CDN).
+*   **Maps**: Leaflet + OpenStreetMap + Leaflet.markercluster.
+*   **Backend**: PocketBase (Auth + Database).
+*   **Architecture**: Build-less Single Page Application (SPA) using `importmap` and `esm.sh`.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Setup & Installation
+
+### 1. Backend (PocketBase)
+
+1.  Download and run [PocketBase](https://pocketbase.io/).
+2.  **Users Collection**:
+    *   Add a text field named `public_token` (used for sharing unique links).
+    *   Enable **Google OAuth2** in the Auth Providers settings.
+3.  **Locations Collection**:
+    *   Create a new collection named `locations`.
+    *   Add the following fields:
+        *   `user` (Relation -> users, Max Select: 1)
+        *   `lat` (Number)
+        *   `lng` (Number)
+        *   `note` (Text)
+        *   `address` (Text)
+        *   `expiresAt` (Date/Time)
+        *   `isPublic` (Boolean)
+        *   `isVague` (Boolean)
+    *   **API Rules**:
+        *   List/View: `""` (Public access allowed for map view).
+        *   Create: `user = @request.auth.id`
+        *   Update: `user = @request.auth.id`
+        *   Delete: `user = @request.auth.id`
+
+### 2. Configuration
+
+1.  Open `lib/pocketbase.ts`.
+2.  Update the `PB_URL` constant to point to your PocketBase instance (e.g., `http://127.0.0.1:8090`).
+
+### 3. Running the App
+
+This project uses modern browser features (ES Modules) and requires no build step (like Webpack or Vite). You simply need to serve the files.
+
+**Using Python:**
+```bash
+python3 -m http.server 8000
+```
+
+**Using Node.js (serve):**
+```bash
+npx serve .
+```
+
+Open your browser to `http://localhost:8000` (or the port specified).
+
+## Usage Guide
+
+1.  **Sign In**: Click "Sign In" and authenticate using your Google account.
+2.  **Dashboard**:
+    *   **Log Location**: Click the button to capture your current GPS coordinates.
+    *   **Vague Mode**: Toggle this ON to add random noise (approx 500m offset) to your location for privacy.
+    *   **Visibility**: Toggle between "Public" (visible on the main map) and "Unlisted".
+3.  **Sharing**:
+    *   If Unlisted, expand the "Share Unique Link" section to copy a private URL to send to friends.
+4.  **Profile**:
+    *   Go to Profile Settings to change your Display Name or Logout.
+
+## License
+
+MIT

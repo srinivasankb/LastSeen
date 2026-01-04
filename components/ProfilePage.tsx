@@ -105,7 +105,7 @@ const ProfilePage: React.FC = () => {
                   placeholder="Enter your name"
                   aria-describedby="name-hint"
                 />
-                <p id="name-hint" className="text-[10px] text-slate-400 mt-2 px-1">This name is visible to your circle members on the map.</p>
+                <p id="name-hint" className="text-[10px] text-slate-400 mt-2 px-1">This name is visible to others on the map.</p>
               </div>
 
               {error && (

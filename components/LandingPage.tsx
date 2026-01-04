@@ -26,7 +26,7 @@ const LandingPage: React.FC = () => {
       {
           num: "03",
           title: "Share",
-          desc: "Your circle sees you on the map. You control when and how long you are visible."
+          desc: "Friends see you on the map. You control when and how long you are visible."
       }
   ];
 
@@ -180,7 +180,7 @@ const LandingPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16 space-y-4">
             <h2 className="text-3xl md:text-5xl font-bold text-slate-900 dark:text-white tracking-tight">Simple. Connected.</h2>
-            <p className="text-slate-500 dark:text-slate-400 max-w-2xl mx-auto text-lg leading-relaxed">Everything you need to stay coordinated with your circle.</p>
+            <p className="text-slate-500 dark:text-slate-400 max-w-2xl mx-auto text-lg leading-relaxed">Everything you need to stay coordinated with friends.</p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
             {features.map((feature, idx) => (

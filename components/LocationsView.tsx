@@ -370,6 +370,13 @@ export default function LocationsView() {
     if (!navigator.geolocation) return setError("GPS not supported.");
     setLogging(true);
     setError(null);
+    
+    const options = {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+    };
+
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
@@ -419,8 +426,19 @@ export default function LocationsView() {
         } catch (err) { setError("Broadcast failed."); }
         finally { setLogging(false); }
       },
-      () => { setError("Location access denied."); setLogging(false); },
-      { enableHighAccuracy: true }
+      (err) => { 
+        setLogging(false);
+        if (err.code === 1) {
+            setError("Location permission denied. Please enable it in your browser settings.");
+        } else if (err.code === 2) {
+            setError("Location unavailable. Check if GPS is enabled.");
+        } else if (err.code === 3) {
+            setError("Request timed out. Please try again.");
+        } else {
+            setError("Failed to get location. Please try again.");
+        }
+      },
+      options
     );
   };
 
@@ -547,6 +565,13 @@ export default function LocationsView() {
                     <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform shadow-sm ${isVague ? 'left-6' : 'left-1'}`}></div>
                  </button>
             </div>
+
+            {error && (
+                <div className="mb-4 p-3 bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-xs font-bold rounded-xl flex items-center gap-2 animate-in fade-in">
+                    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    {error}
+                </div>
+            )}
 
             <button onClick={handleUpdate} disabled={logging} className="w-full py-4 rounded-xl font-bold text-sm uppercase tracking-wider text-white bg-[#6750a4] shadow-lg shadow-indigo-100 dark:shadow-none hover:bg-[#5a4491] active:scale-95 transition-all flex justify-center items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#6750a4]">
               {logging ? (
